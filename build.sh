@@ -10,8 +10,9 @@ set -euo pipefail
 cd "$(dirname "$0")"
 
 CXX="${CXX:-g++}"
+BUILD="${BUILD_DIR:-build}"            # object files and test binaries
 CXXFLAGS="-std=c++17 -O2 -Wall -Wextra -Iinclude -Ithird_party"
-CORE="src/TextUtils.cpp src/Trie.cpp src/InvertedIndex.cpp src/SearchEngine.cpp"
+CORE="src/TextUtils.cpp src/Trie.cpp src/InvertedIndex.cpp src/SearchEngine.cpp src/Recommender.cpp"
 
 if [[ "${OS:-}" == "Windows_NT" ]]; then
     PG_HOME="${PG_HOME:-C:/Program Files/PostgreSQL/18}"
@@ -19,7 +20,9 @@ if [[ "${OS:-}" == "Windows_NT" ]]; then
         export PATH="/c/msys64/ucrt64/bin:$PATH"     # needs a C++17 compiler (GCC 8+)
     fi
     PG_FLAGS=(-I "$PG_HOME/include")
-    PG_LIBS=("$PG_HOME/bin/libpq.dll" -lws2_32)      # link the DLL directly (MinGW)
+    # Link the DLL directly (MinGW) and the GCC runtime statically, so the program does not
+    # pick up the older libwinpthread-1.dll that ships with PostgreSQL.
+    PG_LIBS=("$PG_HOME/bin/libpq.dll" -lws2_32 -static)
     EXE=.exe
 else
     PG_FLAGS=(-I "$(pg_config --includedir 2>/dev/null || echo /usr/include/postgresql)")
@@ -28,21 +31,21 @@ else
 fi
 
 if [[ "${1:-}" == "test" ]]; then
-    mkdir -p build
+    mkdir -p "$BUILD"
     status=0
     for test in tests/test_*.cpp; do
-        name="build/$(basename "${test%.cpp}")$EXE"
+        name="$BUILD/$(basename "${test%.cpp}")$EXE"
         echo "== $test"
         # shellcheck disable=SC2086
-        $CXX $CXXFLAGS -Itests $CORE "$test" -o "$name" && "./$name" || status=1
+        $CXX $CXXFLAGS -Itests $CORE "$test" -o "$name" && "$name" || status=1
     done
     exit $status
 fi
 
-mkdir -p build
+mkdir -p "$BUILD"
 OBJECTS=()
 for source in src/*.cpp; do
-    object="build/$(basename "${source%.cpp}").o"
+    object="$BUILD/$(basename "${source%.cpp}").o"
     OBJECTS+=("$object")
     # Recompile only when the source or any header is newer than the object file.
     if [[ ! -f "$object" || "$source" -nt "$object" || -n "$(find include -newer "$object" -print -quit)" ]]; then
