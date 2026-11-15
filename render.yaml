@@ -1,0 +1,21 @@
+# Render Blueprint: deploys the C++ server (website + REST API) from this repository.
+# The PostgreSQL database is hosted separately (e.g. Neon or Render PostgreSQL); its
+# connection string is entered in the Render dashboard as DATABASE_URL, never committed.
+services:
+  - type: web
+    name: researchnet
+    runtime: docker
+    plan: free
+    autoDeploy: true
+    healthCheckPath: /api/health
+    envVars:
+      - key: DATABASE_URL
+        sync: false            # secret: set it in the dashboard
+      - key: COOKIE_SECURE
+        value: "1"
+      - key: TRUST_PROXY
+        value: "1"
+      - key: DB_POOL_SIZE
+        value: "4"
+      - key: RELOAD_SECONDS
+        value: "120"

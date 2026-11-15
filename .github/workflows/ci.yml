@@ -1,0 +1,52 @@
+# Builds and tests ResearchNet on Linux on every push:
+# unit tests -> PostgreSQL + data import -> API end-to-end tests -> Docker image build.
+name: CI
+
+on:
+  push:
+  pull_request:
+
+jobs:
+  test:
+    runs-on: ubuntu-24.04
+    services:
+      postgres:
+        image: postgres:16
+        env:
+          POSTGRES_USER: researchnet
+          POSTGRES_PASSWORD: ci-only-password
+          POSTGRES_DB: researchnet
+        ports: ["5432:5432"]
+        options: >-
+          --health-cmd "pg_isready -U researchnet" --health-interval 5s --health-timeout 5s --health-retries 10
+    env:
+      DATABASE_URL: postgresql://researchnet:ci-only-password@localhost:5432/researchnet
+    steps:
+      - uses: actions/checkout@v4
+      - name: Install compiler and libpq
+        run: sudo apt-get update -qq && sudo apt-get install -y -qq g++ libpq-dev
+      - name: Unit tests (Trie, inverted index, recommender)
+        run: ./build.sh test
+      - name: Build server
+        run: ./build.sh
+      - name: Import the 10,319 papers
+        run: |
+          pip install "psycopg[binary]==3.2.3"
+          python tools/load_papers.py
+      - name: Start server
+        run: |
+          PORT=8080 RELOAD_SECONDS=0 ./researchnet > server.log 2>&1 &
+          for i in $(seq 1 60); do curl -sf http://127.0.0.1:8080/api/health && exit 0; sleep 1; done
+          cat server.log; exit 1
+      - name: API end-to-end tests
+        run: python tests/api_test.py http://127.0.0.1:8080 "$DATABASE_URL"
+      - name: Server log
+        if: always()
+        run: cat server.log || true
+
+  docker:
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v4
+      - name: Build the production image
+        run: docker build -t researchnet .

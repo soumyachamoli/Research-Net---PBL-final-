@@ -1,0 +1,9 @@
+.git
+.env
+config.txt
+build
+data
+researchnet
+researchnet.exe
+screenshots
+__pycache__

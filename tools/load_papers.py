@@ -88,7 +88,14 @@ def upsert_keywords(cur, papers):
     # Lower-case in Python, not SQL: PostgreSQL's lower() depends on the database locale
     # (with the C locale it leaves letters like "Ł" unchanged).
     cur.execute("SELECT name, id FROM keywords")
-    return {name.lower(): kid for name, kid in cur.fetchall()}
+    ids = {name.lower(): kid for name, kid in cur.fetchall()}
+    # The database may treat two spellings as the same keyword (its lower() can differ
+    # from Python's for some letters); those share the row PostgreSQL already has.
+    for key, name in names.items():
+        if key not in ids:
+            cur.execute("SELECT id FROM keywords WHERE lower(name) = lower(%s)", (name,))
+            ids[key] = cur.fetchone()[0]
+    return ids
 
 
 PAPER_SQL = """

@@ -4,5 +4,6 @@
   "postCreateCommand": "bash .devcontainer/setup.sh",
   "postStartCommand": "sudo service postgresql start",
   "forwardPorts": [8080],
+  "containerEnv": { "HOST": "0.0.0.0" },
   "customizations": { "vscode": { "extensions": ["ms-vscode.cpptools"] } }
 }

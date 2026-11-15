@@ -1,137 +1,329 @@
-# ResearchNet — Research Paper Search and Recommendation System
+# ResearchNet: Research Paper Search and Recommendation
 
-A second-year PBL project in C++. Research papers are stored in **PostgreSQL**, loaded into C++, and handled with data structures implemented by hand: a **Trie**, **Linked Lists**, and an **Inverted Index** built as a **hash table**. No STL containers are used.
+A second-year PBL project. ResearchNet is a website for finding research papers: ranked
+keyword search with Trie autocomplete, advanced filters, paper pages, saved papers, history,
+and recommendations that explain themselves. The search and recommendation algorithms are
+implemented in **C++17**. All data (papers, users, bookmarks, history) lives in
+**PostgreSQL**.
+
+It currently holds **10,319 genuine research papers** from [OpenAlex](https://openalex.org)
+(CC0 open data): the ~1,000 most-cited English articles and reviews (2010-2025, each with an
+abstract and DOI) from ten Computer Science research areas, with 34,007 authors, 1,707
+journals/venues and 31,118 keywords. No record is invented.
 
 ## Features
 
-- Keyword search with **AND / OR**, and **autocomplete** while typing
-- **Filters:** publication year range, author, journal quartile (Q1 to Q4), minimum impact factor
-- **Sorting:** by impact factor (high to low or low to high) or newest first
-- **Paper page** with full details read from PostgreSQL
-- **My History:** recently viewed papers (newest first), delete one entry, or clear all
-- **Recommendations** based on keyword similarity, author similarity, impact factor and quartile
-- Website (Search, Paper and My History pages) and a console menu
+| Area | What it does |
+|---|---|
+| Search | Ranked keyword search over title, abstract, keywords, topic, author names and journal (TF-IDF). `AND` by default, `OR` supported; falls back to "any word" when no paper has all words, and says so. |
+| Autocomplete | Trie suggestions for paper titles, keywords, topics, research categories and authors, ranked and without duplicates. |
+| Filters | Author, journal, research category, keyword, publication type, exact year, year range, min/max journal impact. All combine. |
+| Sorting | Relevance, newest, oldest, impact high to low / low to high, most cited, first author A-Z. Paginated. |
+| Paper page | Full abstract, authors and keywords (clickable filters), DOI and publisher links, journal details with the impact metric's source and year, similar papers. |
+| Recommendations | Similar papers for every paper, plus personal recommendations from saved papers, viewed papers, searches and profile interests, each with reasons and a score breakdown. |
+| Accounts | Register (name, email, password), login, logout, profile (name, interests, password change). |
+| Your data | Saved papers, search history and viewed papers; delete one item or clear all. Private to each user. |
+
+Pages: landing, login/register, dashboard, search, paper details, recommendations, saved
+papers, history, profile. The site works on phones (collapsible menu and filters).
 
 ## Architecture
 
 ```
-PostgreSQL (papers table)
-      ↓  libpq  (Database.cpp)
-Array of Paper structs
-      ↓  text processing (TextUtils.cpp: lowercase, split words, remove stop words)
- ┌────┴──────────────┐
-Trie            Inverted Index (hash table → linked lists of paper IDs)
- ↓                   ↓
-Autocomplete     Keyword search (AND / OR)
-                     ↓
-              Search results → Recommendations (common keywords)
-                     ↓
-         Console menu (main.cpp)  or  Website (WebServer.cpp + web/)
+ Browser (web/: index.html, style.css, app.js - plain JavaScript, hash routing)
+     |  JSON over HTTP (REST API)
+     v
+ C++17 server (cpp-httplib)
+     WebServer + PaperRoutes / AuthRoutes / UserRoutes   (HTTP, validation, sessions)
+     SearchEngine:  Trie  +  InvertedIndex (TF-IDF)  +  id/author/keyword hash maps
+     Recommender:   TF-IDF cosine similarity + weighted scoring + top-k heap
+     PaperRepository / UserRepository / ActivityRepository   (all SQL, parameterized)
+     Database: pool of libpq connections
+     |
+     v
+ PostgreSQL (papers, authors, journals, keywords, users, sessions, bookmarks, history, ...)
+     ^
+     |  tools/fetch_openalex.py -> data/openalex_papers.jsonl.gz -> tools/load_papers.py
+ OpenAlex API
 ```
 
-PostgreSQL only **stores** the papers. All searching is done by the C++ data structures.
+How a search runs:
 
-## Files
+1. The C++ **inverted index** finds the papers that match the words and scores them (TF-IDF cosine).
+2. PostgreSQL receives those ids and scores (`unnest(ids, scores)`) and applies the **filters**,
+   **sorting** and **pagination** with its indexes, all in one query.
+3. The page of results is returned as JSON. A logged-in user's search goes into their history.
 
-```
-include/                 header files (declarations)
-  Paper.h                struct Paper: one row of the papers table
-  TextUtils.h            lowercase, split into words, stop words
-  Trie.h                 Trie for autocomplete
-  LinkedList.h           linked list of paper IDs (inverted index, search results)
-  History.h              linked list of viewed papers (browsing history)
-  InvertedIndex.h        word → linked list of paper IDs (hash table)
-  Database.h             PostgreSQL connection (libpq)
-  SearchEngine.h         loads papers, builds Trie + index, search, recommend
-  WebServer.h            small web server for the website
-src/                     the matching .cpp files + main.cpp (menu)
-web/                     index.html, style.css, app.js (the website)
-sql/database.sql         creates the papers table + 64 real papers
-config.example.txt       database settings template (copy to config.txt)
-```
+At startup the server reads all papers from PostgreSQL and builds the Trie and index
+(about 3-6 seconds for 10,319 papers, about 175 MB of RAM). A background thread checks
+every `RELOAD_SECONDS` whether papers changed (row count + latest `updated_at`). If they
+did, it builds a new engine and swaps it in while requests keep running.
 
-## How each part works
+## How the algorithms work
 
-**Trie (`Trie.cpp`).** Each node has `children[27]` (a–z plus space) and `isEndOfWord`. Words that start the same way share nodes. `autocomplete("mach")` walks m→a→c→h, then visits every node below it (recursively) and collects the words it finds: *machine, machine learning, machine translation*. Keyword phrases like "machine learning" are inserted too, which is why the space slot exists.
+### Trie (autocomplete): `include/Trie.h`, `src/Trie.cpp`
 
-**Linked List (`LinkedList.cpp`).** A chain of `ListNode {value, next}` storing paper IDs without duplicates. `addAll()` is used for **OR** (union) and `keepOnlyCommon()` for **AND** (intersection).
+A prefix tree: every phrase is a path from the root, one character per level, and phrases
+with the same beginning share nodes. Keys are normalized (lower case, letters/digits/spaces),
+so matching is case-insensitive. Inserting the same phrase twice adds to its weight instead
+of creating a duplicate.
 
-**Inverted Index (`InvertedIndex.cpp`).** An array of 101 buckets. `hashFunction(word)` turns a word into a bucket number. Each bucket holds a linked list of `WordNode`s (for words that land in the same bucket), and each `WordNode` has a `LinkedList` of the papers containing that word:
+- Inserted: paper titles (weight `1 + log10(1 + citations)`), keyword phrases, topics and
+  categories (weight = number of papers using them), and authors with 2+ papers.
+- Nodes are stored in a `std::vector`; each node keeps its children as `(char, index)` pairs.
+- After building, `finalize()` walks the tree once, children before parents, and stores the
+  **10 best suggestions of each subtree in its node**. Autocomplete then just walks down
+  the typed prefix and returns that list: **O(length of the prefix)**, whatever the size
+  of the dataset.
+- Size with 10,319 papers: about 930,000 nodes.
 
-```
-"learning" → hash → bucket 57 → WordNode "learning" → [2, 10, 28, 34 ...]
-```
+### Inverted index (search): `include/InvertedIndex.h`, `src/InvertedIndex.cpp`
 
-**History (`History.cpp`).** A linked list of `HistoryNode {paperId, next}`. `addHistory()` puts the paper at the head (newest first) and first removes it if it was already there. `deleteHistoryItem()` finds the node, links the previous node to the next one, and frees the node with `delete`. `clearHistory()` deletes every node. At most 30 entries are kept.
+A hash table (`std::unordered_map`) from each word to its **posting list**: the papers that
+contain it, each with a weight.
 
-**Filters and sorting (`SearchEngine::searchPapers`).** Step 1 gets candidate papers from the inverted index (or all papers if the search box is empty). Step 2 keeps only papers that pass every filter. Step 3 sorts them with **insertion sort** by impact factor or year.
+1. Text processing (`TextUtils`): lower-case, split into words (digits kept: "5g", "gpt4"),
+   remove stop words (`std::unordered_set`), light stemming ("networks" -> "network",
+   "studies" -> "study", "learning" -> "learn"). Queries go through the same steps.
+2. Word counts per paper are field-weighted: title x3; keywords, topic and authors x2;
+   abstract, journal and category x1.
+3. Weights: `tf-idf = (1 + ln tf) * idf`, with `idf = ln((N + 1) / (df + 1)) + 1`, where
+   `df` is the number of papers containing the word. Rare words count more. Each paper's
+   vector is divided by its length, so a dot product equals **cosine similarity**.
+4. Query: only the posting lists of the query words are walked, adding up
+   `query weight x paper weight` per paper. With AND, a paper must contain every word.
+   Results are sorted by score (`std::sort`).
 
-**Search (`SearchEngine::keywordSearch`).** The query is split into words. The first word's paper list is copied into the results. For each next word, the results are intersected with its list (AND, the default) or united with it (after `OR`).
+The index holds about 61,000 distinct terms. A search takes about 14 ms end to end
+(median, including PostgreSQL filtering).
 
-**Recommendation (`SearchEngine::recommend`).** For every other paper:
+### Recommendation algorithm: `include/Recommender.h`, `src/Recommender.cpp`
 
-```
-score = 3 × (shared keyword words) + 5 × (shared authors)
-      + impact factor (rounded down) + quartile bonus (Q1 = 4, Q2 = 3, Q3 = 2, Q4 = 1)
-```
+Every candidate gets five scores, each normalized to 0..1:
 
-Only papers that share at least one keyword word or author are considered. They are sorted with **selection sort** and the top 6 are shown, with the reasons.
-
-**Database (`Database.cpp`).** `connect()` reads the connection line from `config.txt`. `getPapers()` runs `SELECT ... FROM papers` and copies each row into a `Paper` struct (in a `new Paper[rows]` array). `searchPaperById()` uses a parameter (`$1`), which protects against SQL injection.
-
-## Time complexity
-
-| Operation | Time | Notes |
+| Component | Meaning | Default weight |
 |---|---|---|
-| Trie insert / search | O(L) | L = length of the word |
-| Trie autocomplete | O(P + N) | P = prefix length, N = nodes below the prefix |
-| Index insert / lookup | O(1) average | hash to a bucket, then a short bucket list |
-| Linked list insert | O(n) | checks for duplicates while walking to the end |
-| AND (keepOnlyCommon) | O(n × m) | sizes of the two lists |
-| History add / delete | O(n) | n ≤ 30 entries |
-| Filter + insertion sort | O(R) + O(R²) | R = search results |
-| Recommendation | O(P × K²) + O(P²) sort | P = papers, K = keyword words per paper |
+| content | TF-IDF cosine similarity (title, abstract, keywords, topic, ...) | 0.50 |
+| keywords | shared keywords (Jaccard overlap) | 0.20 |
+| authors | shared authors | 0.15 |
+| recency | `(year - oldest) / (newest - oldest)` | 0.10 |
+| impact | `log(1 + impact) / log(1 + max impact)`, only when known | 0.05 |
 
-## Run in GitHub Codespaces (nothing to install on your PC)
+```
+score = sum(weight_i * component_i) / sum(weight_i)
+```
 
-1. Open the repository → **Code → Codespaces → Create codespace**. `.devcontainer/setup.sh` runs automatically: it installs g++, PostgreSQL and libpq, creates the database and table, inserts the papers, writes `config.txt`, and compiles.
-2. Menu version: `./researchnet`
-3. Website version: `./researchnet --web`, then click **Open in Browser** for port 8080.
+- Content, keyword and author scores are divided by the best value among the candidates of
+  that request, so the best match gets 1. Raw cosines are small (0.1-0.4), and without
+  this step the low-weight recency term could outweigh text similarity.
+- When the impact is unknown, it is left out of **both** sums: missing data is neither a
+  zero nor a penalty, and impact can never dominate relevance.
+- **Similar papers**: candidates come from the inverted index (only papers sharing a
+  word are visited) plus papers with the same authors or keywords. The paper itself is
+  never recommended.
+- **For you**: the user's interest vector is a weighted sum of TF-IDF vectors: saved
+  papers x1.0, viewed papers x0.5, profile interests x0.8, recent searches x0.4. Papers
+  already saved or opened are skipped. New users get recent, highly cited papers.
+- Top-k uses a size-k min-heap (`std::priority_queue`).
+- Every result lists its reasons, all traceable to data: "Same author: ...", "Similar
+  research keywords: ...", "Similar to your saved paper: <title>", "Matches your interest:
+  ...", "Same research topic: ...".
+- The weights can be changed without recompiling: `RN_WEIGHTS=0.5,0.2,0.15,0.1,0.05`.
 
-To redo the setup by hand: `bash .devcontainer/setup.sh`
+### Advanced filters: `src/PaperRepository.cpp`
 
-## Run on Windows + VS Code (needs about 1.5 GB of disk space)
+Each filter adds one SQL condition, and all conditions are combined with AND. User
+input is always a parameter (`$1`, `$2`, ...), never pasted into the SQL.
 
-1. Install **PostgreSQL** from postgresql.org (keep port 5432, remember your password). This also installs **libpq**: headers in `C:\Program Files\PostgreSQL\<version>\include`, the library in `...\lib`.
-2. Install **MSYS2** (msys2.org). In the "MSYS2 UCRT64" terminal run `pacman -S mingw-w64-ucrt-x86_64-gcc`.
-3. Add `C:\msys64\ucrt64\bin` and `C:\Program Files\PostgreSQL\<version>\bin` to your PATH, then restart VS Code.
-4. Create the database and table:
-   ```
-   psql -U postgres -c "CREATE DATABASE researchnet;"
-   psql -U postgres -d researchnet -f sql/database.sql
-   ```
-5. Copy `config.example.txt` to `config.txt` and put in your password.
-6. Compile (replace `17` with your PostgreSQL version):
-   ```
-   g++ -std=c++17 -I include -I "C:/Program Files/PostgreSQL/17/include" src/*.cpp -o researchnet.exe -L "C:/Program Files/PostgreSQL/17/lib" -lpq -lws2_32
-   ```
-   `-I` = where header files are, `-L` = where libraries are, `-lpq` = link libpq, `-lws2_32` = Windows networking (for the website).
-7. Run `researchnet.exe`, or `researchnet.exe --web` and open http://localhost:8080.
+| Filter | SQL | Index used |
+|---|---|---|
+| author | an author name word starts with the text (`ILIKE`) | trigram GIN on `authors.name` |
+| journal | journal name contains the text | trigram GIN on `journals.name` |
+| category, type, keyword | exact match | B-tree indexes |
+| year / year range | `publication_year = / >= / <=` | B-tree on `publication_year` |
+| impact range | `journals.impact_factor >= / <=` | B-tree on `impact_factor` |
 
-## Your password
+Papers with an unknown impact are excluded when an impact filter is set; they are not
+treated as 0. Sorting puts unknown values last.
 
-`config.txt` holds the connection line, including your password. It is listed in `.gitignore`, so Git never uploads it. Only `config.example.txt` (with a placeholder) goes to GitHub. To change the password, just edit `config.txt`.
+## About "impact factor"
 
-## Data
+Journal Impact Factors are owned by Clarivate and are not open data. ResearchNet uses
+**OpenAlex's 2-year mean citedness** of each venue, an open, impact-factor-like journal
+metric. It is stored on the `journals` table together with its source
+(`OpenAlex 2yr_mean_citedness`) and the year it was retrieved, and the site labels it
+accordingly. Repositories such as arXiv get no value. 10,140 of the 10,319 papers have one.
 
-`sql/database.sql` inserts 100 papers of two kinds:
+## Database
 
-- **64 real papers.** Titles, authors, years and arXiv links are real; `abstract_text` is a short one-line summary, not the official abstract. They are arXiv preprints, so they have **no impact factor and no quartile**: impact factors belong to journals.
-- **36 sample papers** (titles start with `[SAMPLE]`): invented papers in invented journals with **demo** impact factors and quartiles, so the filters and sorting can be tested. Real impact factors come from Clarivate's Journal Citation Reports (paid); free journal quartiles are available from SCImago (scimagojr.com).
+`sql/schema.sql` (safe to run again, never deletes data):
+
+- Research data: `papers`, `authors`, `paper_authors`, `journals`, `keywords`, `paper_keywords`
+- Users: `users` (bcrypt hash), `sessions` (SHA-256 of the token), `bookmarks`,
+  `search_history`, `view_history`, `user_interests`
+- Indexes for every filter, a trigram index for name search, and a generated `tsvector`
+  column (PostgreSQL full-text search) kept as a baseline for comparison.
+
+## Folder structure
+
+```
+include/, src/         C++17 source (one class per file pair)
+  TextUtils            tokenizing, stop words, stemming
+  Trie                 autocomplete
+  InvertedIndex        TF-IDF index, cosine similarity
+  SearchEngine         builds Trie + index from the papers, search, lookups
+  Recommender          similar papers, personal recommendations
+  Database             libpq connection pool, parameterized queries
+  PaperRepository      paper SQL: filters, sorting, pagination, details
+  UserRepository       accounts, password hashing, sessions
+  ActivityRepository   bookmarks, history, interests
+  WebServer            server setup, security, sessions, login limiter
+  PaperRoutes, AuthRoutes, UserRoutes   REST API handlers
+  Config, EngineHolder, HttpUtils, main
+web/                   website (index.html, style.css, app.js)
+sql/schema.sql         database schema
+tools/                 fetch_openalex.py (download + clean), load_papers.py (import)
+data/                  openalex_papers.jsonl.gz: the cleaned dataset (10,319 papers)
+tests/                 C++ unit tests, api_test.py (end to end), ui_test.mjs (browser)
+third_party/           cpp-httplib 0.18.3, nlohmann/json 3.11.3 (single headers, MIT)
+Dockerfile, render.yaml, .github/workflows/ci.yml   deployment and CI
+```
+
+## Run it locally
+
+You need a C++17 compiler (g++ 8 or newer), PostgreSQL 13+ with libpq, and Python 3 with psycopg.
+
+**1. Database**
+
+```bash
+createdb researchnet                                  # or: psql -c "CREATE DATABASE researchnet;"
+pip install "psycopg[binary]"
+python tools/load_papers.py "postgresql://USER:PASSWORD@localhost:5432/researchnet"
+```
+
+The loader creates the tables (`sql/schema.sql`) and imports the papers. Running it again
+changes nothing.
+
+**2. Configure.** Either set `DATABASE_URL`, or copy `config.example.txt` to `config.txt`
+and put in your password (`config.txt` and `.env` are git-ignored).
+
+**3. Build and run**
+
+```bash
+./build.sh test        # unit tests (no database needed)
+./build.sh             # builds ./researchnet
+./researchnet          # http://127.0.0.1:8080
+```
+
+Windows: install PostgreSQL and MSYS2 (`pacman -S mingw-w64-ucrt-x86_64-gcc`), then run
+`./build.sh` from Git Bash. It uses `C:/msys64/ucrt64` g++ and links PostgreSQL's
+`libpq.dll`; set `PG_HOME` if PostgreSQL is not in `C:/Program Files/PostgreSQL/18`.
+Add PostgreSQL's `bin` folder to `PATH` so `libpq.dll` is found at runtime. If the
+compiler runs out of memory, use `JOBS=1 ./build.sh`.
+
+**GitHub Codespaces:** open the repository in a codespace. `.devcontainer/setup.sh`
+installs everything, imports the papers and builds. Then run `./researchnet`.
+
+### Settings (environment variables)
+
+| Variable | Default | Meaning |
+|---|---|---|
+| `DATABASE_URL` | `config.txt` | PostgreSQL connection string |
+| `HOST`, `PORT` | `127.0.0.1`, `8080` | where the server listens |
+| `DB_POOL_SIZE` | 4 | PostgreSQL connections |
+| `COOKIE_SECURE` | off | `1` = session cookie only over HTTPS (production) |
+| `TRUST_PROXY` | off | `1` = client IP from `X-Forwarded-For` (behind a host's proxy) |
+| `RELOAD_SECONDS` | 60 | how often to check for changed papers (0 = never) |
+| `RN_WEIGHTS` | `0.5,0.2,0.15,0.1,0.05` | recommender weights |
+
+### Refreshing the data
+
+```bash
+python tools/fetch_openalex.py --per 1050      # optional: OPENALEX_API_KEY raises the API budget
+python tools/load_papers.py "$DATABASE_URL"
+```
+
+The fetch script caches raw API pages in `data/raw/` (git-ignored), backs off on rate
+limits, and only uses the standard library. A running server picks up the changes by itself.
+
+## REST API
+
+| Method | Path | Notes |
+|---|---|---|
+| GET | `/api/search`, `/api/papers` | `q, author, journal, category, keyword, type, year, year_from, year_to, min_impact, max_impact, sort, page, page_size` |
+| GET | `/api/autocomplete?prefix=` | Trie suggestions |
+| GET | `/api/papers/:id` | full details (recorded as viewed when logged in) |
+| GET | `/api/papers/:id/similar` | similar papers with scores and reasons |
+| GET | `/api/recommendations` | login required |
+| GET | `/api/categories`, `/api/filters`, `/api/featured`, `/api/stats`, `/api/health` | |
+| POST | `/api/register`, `/api/login`, `/api/logout` | JSON body |
+| GET | `/api/me` | current user |
+| GET, POST | `/api/bookmarks` | POST `{"paperId": 12}` |
+| DELETE | `/api/bookmarks/:paperId` | |
+| GET, DELETE | `/api/history` | DELETE clears everything |
+| DELETE | `/api/history/searches/:id`, `/api/history/views/:paperId` | |
+| GET, PUT | `/api/profile` | PUT `{"name", "interests": [...]}` |
+| PUT | `/api/profile/password` | `{"currentPassword", "newPassword"}` |
+
+Errors are JSON (`{"error": "..."}`) with the right status: 400 invalid input, 401 not
+logged in, 403 forbidden, 404 not found, 409 duplicate email, 415 not JSON, 429 too many
+failed logins.
+
+## Security
+
+- Passwords: bcrypt (cost 10) via PostgreSQL `pgcrypto`, 8-72 characters; never stored or
+  logged in plain text.
+- Sessions: random 256-bit token in an `HttpOnly`, `SameSite=Lax` cookie (`Secure` in
+  production), valid 7 days; only its SHA-256 hash is stored. A password change ends
+  other sessions.
+- Duplicate accounts are impossible (unique index on `lower(email)`).
+- Login: the same error for unknown email and wrong password, and 10 failures per client
+  per 15 minutes -> 429.
+- Requests that change data are rejected if they come from another site (`Origin` check)
+  or are not JSON (CSRF protection).
+- Every query is parameterized; every user-data query is scoped to the logged-in user.
+- The website inserts data as text only, under a strict Content-Security-Policy.
+
+## Tests
+
+| Suite | Command | Checks |
+|---|---|---|
+| C++ unit tests | `./build.sh test` | 80 (text processing, Trie, inverted index, search engine, recommender) |
+| API end to end | `python tests/api_test.py http://127.0.0.1:8080 "$DATABASE_URL"` | 74 (search, every filter and sort, pagination, validation, accounts, bookmarks, history, isolation between users, recommendations, filter counts cross-checked with SQL, latency) |
+| Browser | `node tests/ui_test.mjs http://127.0.0.1:8080` (headless Chrome on port 9222) | 28 (all pages, registration, filters, bookmarks, profile, phone layout, no console errors) |
+
+GitHub Actions (`.github/workflows/ci.yml`) runs the unit tests, imports the data into
+PostgreSQL, runs the API suite and builds the Docker image on every push.
+
+## Deployment
+
+The server (website + API) runs as one Docker container. PostgreSQL is hosted separately.
+
+1. **Database**: create a PostgreSQL database (e.g. [Neon](https://neon.tech) free tier, or
+   Render PostgreSQL) and copy its connection string (with `sslmode=require`).
+2. **Load the papers** from your computer: `python tools/load_papers.py "<connection string>"`.
+3. **Web service**: on [Render](https://render.com), create a Blueprint from this repository
+   (`render.yaml`) and enter `DATABASE_URL` when asked. Render builds the `Dockerfile`,
+   checks `/api/health`, and redeploys on every push.
+
+Secrets go only into the hosting dashboard, never into the repository.
 
 ## Limitations
 
-- Only letters a–z are indexed (digits and accents are ignored).
-- Search results are sorted by ID, impact factor or year, not by relevance.
-- History is kept in memory, so it is empty again after restarting the program.
-- The website handles one request at a time (no threads), which is fine for one user.
+- About 10k papers from ten Computer Science areas, chosen as the most cited, so the
+  collection is biased toward well-known work. The index is rebuilt in memory, which suits
+  tens of thousands of papers, not millions.
+- The impact metric is OpenAlex's 2-year mean citedness, not Clarivate's JIF.
+- The stemmer is simple (plurals, -ing, -ed). There is no spelling correction and no
+  phrase search ("..." quotes).
+- Search relevance has not been evaluated against human relevance judgements; a labelled
+  query set with precision@k would be the next step.
+- Login rate limiting is kept in memory, so it is per server instance.
+- On free hosting tiers the server sleeps when idle; the first request then takes longer
+  while the index is rebuilt.
+
+## Credits
+
+Paper metadata: [OpenAlex](https://openalex.org) (CC0). HTTP server:
+[cpp-httplib](https://github.com/yhirose/cpp-httplib) (MIT). JSON:
+[nlohmann/json](https://github.com/nlohmann/json) (MIT).
