@@ -4,102 +4,37 @@
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <title>ResearchNet</title>
-  <link rel="stylesheet" href="style.css">
+  <meta name="description" content="Search and discover research papers: ranked keyword search, advanced filters and explainable recommendations.">
+  <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Crect width='32' height='32' rx='7' fill='%232848a8'/%3E%3Cpath d='M9 23V9h7a4.5 4.5 0 0 1 0 9h-7m7 0 5 5' stroke='white' stroke-width='3' fill='none' stroke-linecap='round' stroke-linejoin='round'/%3E%3C/svg%3E">
+  <link rel="stylesheet" href="/style.css">
 </head>
 <body>
+  <a class="skip-link" href="#main">Skip to content</a>
+
   <header class="topbar">
-    <a href="#/search" class="logo">Research<span>Net</span></a>
-    <nav>
-      <a href="#/search" id="nav-search">Search</a>
-      <a href="#/history" id="nav-history">My History <span id="history-count" class="count"></span></a>
-    </nav>
+    <div class="topbar-inner">
+      <a class="brand" href="#/" aria-label="ResearchNet home">
+        <span class="brand-mark" aria-hidden="true">R</span>
+        <span class="brand-name">ResearchNet</span>
+      </a>
+      <div class="topbar-search" id="topbar-search"></div>
+      <button class="menu-button" id="menu-button" aria-expanded="false" aria-controls="main-nav" aria-label="Menu">
+        <span></span><span></span><span></span>
+      </button>
+      <nav class="main-nav" id="main-nav" aria-label="Main"></nav>
+    </div>
   </header>
 
-  <!-- SEARCH PAGE -->
-  <section id="page-search" class="page">
-    <div class="hero">
-      <h1>Find research papers</h1>
-      <p id="stats" class="muted">Loading papers from PostgreSQL…</p>
-      <form id="search-form" class="searchbar" autocomplete="off">
-        <div class="box">
-          <input id="query" type="search" placeholder="Search by keyword, e.g. machine learning healthcare">
-          <ul id="suggestions" hidden></ul>
-        </div>
-        <button type="submit">Search</button>
-      </form>
-      <p class="tip">Words are combined with AND. Type OR between words to match either.</p>
+  <main id="main" tabindex="-1"></main>
+
+  <footer class="footer">
+    <div class="footer-inner">
+      <span>ResearchNet: research paper search and recommendation (C++17 + PostgreSQL)</span>
+      <span>Paper metadata from <a href="https://openalex.org" target="_blank" rel="noopener">OpenAlex</a> (CC0)</span>
     </div>
+  </footer>
 
-    <div class="layout">
-      <aside class="filters">
-        <h2>Filters</h2>
-
-        <label>Sort by
-          <select id="f-sort">
-            <option value="0">Default</option>
-            <option value="1">Impact factor: high to low</option>
-            <option value="2">Impact factor: low to high</option>
-            <option value="3">Newest first</option>
-          </select>
-        </label>
-
-        <div class="group">
-          <span class="group-label">Journal quartile</span>
-          <div class="segmented" id="f-quartile">
-            <button type="button" data-q="" class="on">All</button>
-            <button type="button" data-q="Q1">Q1</button>
-            <button type="button" data-q="Q2">Q2</button>
-            <button type="button" data-q="Q3">Q3</button>
-            <button type="button" data-q="Q4">Q4</button>
-          </div>
-        </div>
-
-        <label>Minimum impact factor
-          <select id="f-impact">
-            <option value="0">Any</option>
-            <option value="1">1 or more</option>
-            <option value="3">3 or more</option>
-            <option value="5">5 or more</option>
-            <option value="8">8 or more</option>
-          </select>
-        </label>
-
-        <div class="row">
-          <label>Year from<input id="f-from" inputmode="numeric" placeholder="2015"></label>
-          <label>Year to<input id="f-to" inputmode="numeric" placeholder="2025"></label>
-        </div>
-
-        <label>Author<input id="f-author" placeholder="e.g. Sharma"></label>
-
-        <button type="button" id="f-reset" class="link">Reset filters</button>
-      </aside>
-
-      <div class="results-area">
-        <p id="status" class="status"></p>
-        <ul id="results" class="cards"></ul>
-      </div>
-    </div>
-  </section>
-
-  <!-- PAPER PAGE -->
-  <section id="page-paper" class="page" hidden>
-    <a href="#/search" class="back">&larr; Back to results</a>
-    <article id="paper"></article>
-  </section>
-
-  <!-- HISTORY PAGE -->
-  <section id="page-history" class="page narrow" hidden>
-    <div class="history-head">
-      <div>
-        <h1>My History</h1>
-        <p class="muted">Recently viewed papers, newest first (stored in a linked list).</p>
-      </div>
-      <button type="button" id="clear-history" class="danger">Clear history</button>
-    </div>
-    <h3 class="section-label">RECENTLY VIEWED</h3>
-    <ul id="history" class="cards"></ul>
-  </section>
-
-  <script src="app.js"></script>
+  <div class="toast" id="toast" role="status" aria-live="polite" hidden></div>
+  <script src="/app.js"></script>
 </body>
 </html>
