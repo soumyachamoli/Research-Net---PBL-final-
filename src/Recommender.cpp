@@ -87,6 +87,30 @@ double Recommender::combine(Recommendation& rec) const
     return rec.score;
 }
 
+// Normalizes the components over this set of candidates, combines them, keeps the best.
+// Raw cosine values are small (0.1-0.4 for related papers) while recency is spread over
+// 0..1, so without this step the small-weight recency term could outweigh content.
+// Content, keyword and author scores are therefore divided by their maximum here: the
+// best match of THIS request gets 1. Recency and impact are already on a 0..1 scale.
+vector<Recommendation> Recommender::rank(vector<Recommendation>& candidates, size_t count) const
+{
+    double maxContent = 0, maxKeywords = 0, maxAuthors = 0;
+    for (const Recommendation& rec : candidates)
+    {
+        maxContent = max(maxContent, rec.content);
+        maxKeywords = max(maxKeywords, rec.keywords);
+        maxAuthors = max(maxAuthors, rec.authors);
+    }
+    for (Recommendation& rec : candidates)
+    {
+        rec.content = maxContent > 0 ? rec.content / maxContent : 0;
+        rec.keywords = maxKeywords > 0 ? rec.keywords / maxKeywords : 0;
+        rec.authors = maxAuthors > 0 ? rec.authors / maxAuthors : 0;
+        combine(rec);
+    }
+    return topK(candidates, count);
+}
+
 // Keeps the `count` best recommendations using a min-heap of size `count`:
 // the heap top is the weakest of the current best, and is replaced when a better one comes.
 vector<Recommendation> Recommender::topK(vector<Recommendation>& candidates, size_t count) const
@@ -208,6 +232,7 @@ vector<Recommendation> Recommender::similarTo(int paperId, size_t count) const
         Recommendation rec;
         rec.paperId = other.id;
         rec.content = min(1.0, item.second);
+        rec.similarity = rec.content;
         rec.keywords = keywordUnion > 0 ? (double)sharedKeywords.size() / keywordUnion : 0;   // Jaccard
         rec.authors = smallerTeam > 0 ? min(1.0, (double)sharedAuthors.size() / smallerTeam) : 0;
         rec.recency = recencyScore(other);
@@ -216,7 +241,6 @@ vector<Recommendation> Recommender::similarTo(int paperId, size_t count) const
         {
             continue;                                  // not related at all
         }
-        combine(rec);
 
         if (!sharedAuthors.empty())
         {
@@ -240,7 +264,7 @@ vector<Recommendation> Recommender::similarTo(int paperId, size_t count) const
         }
         candidates.push_back(rec);
     }
-    return topK(candidates, count);
+    return rank(candidates, count);
 }
 
 vector<Recommendation> Recommender::forUser(const UserProfile& profile, size_t count) const
@@ -394,6 +418,7 @@ vector<Recommendation> Recommender::forUser(const UserProfile& profile, size_t c
         Recommendation rec;
         rec.paperId = paper.id;
         rec.content = min(1.0, item.second);
+        rec.similarity = rec.content;
         rec.keywords = paper.keywords.empty() ? 0 : (double)sharedKeywords.size() / paper.keywords.size();
         rec.authors = min(1.0, sharedAuthors.size() / 2.0);
         rec.recency = recencyScore(paper);
@@ -402,7 +427,6 @@ vector<Recommendation> Recommender::forUser(const UserProfile& profile, size_t c
         {
             continue;
         }
-        combine(rec);
 
         // Explanations: which of the user's own papers / interests this matches.
         int bestSource = -1;
@@ -452,5 +476,5 @@ vector<Recommendation> Recommender::forUser(const UserProfile& profile, size_t c
         }
         candidates.push_back(rec);
     }
-    return topK(candidates, count);
+    return rank(candidates, count);
 }

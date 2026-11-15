@@ -2,6 +2,7 @@
 #define WEBSERVER_H
 
 #include "Config.h"
+#include "ActivityRepository.h"
 #include "Database.h"
 #include "EngineHolder.h"
 #include "PaperRepository.h"
@@ -32,6 +33,7 @@ private:
 // Route handlers are grouped by feature:
 //   PaperRoutes.cpp  search, filters, autocomplete, paper details
 //   AuthRoutes.cpp   register, login, logout, current user
+//   UserRoutes.cpp   bookmarks, history, profile, recommendations, similar papers
 class WebServer
 {
 public:
@@ -44,11 +46,13 @@ private:
     EngineHolder& engines_;
     PaperRepository papers_;
     UserRepository users_;
+    ActivityRepository activity_;
     LoginLimiter loginLimiter_;
     httplib::Server server_;
 
     void registerPaperRoutes();
     void registerAuthRoutes();
+    void registerUserRoutes();
 
     // Logged-in user of a request (from the session cookie), if any.
     std::optional<User> currentUser(const httplib::Request& req);

@@ -3,6 +3,7 @@
 #include "check.h"
 #include "Recommender.h"
 #include "SearchEngine.h"
+#include <algorithm>
 #include <cmath>
 #include <string>
 using namespace std;
@@ -66,7 +67,13 @@ static void testRecommender()
         CHECK(r.score >= 0 && r.score <= 1);
         CHECK(!r.reasons.empty());
     }
-    CHECK(similar[0].paperId == 2);                               // shares author 2 + keyword + text
+    CHECK(similar[0].paperId == 2);
+    double bestContent = 0;
+    for (const auto& r : similar)
+    {
+        bestContent = max(bestContent, r.content);
+    }
+    CHECK(fabs(bestContent - 1.0) < 1e-9);                        // best match of the request -> 1                               // shares author 2 + keyword + text
     for (size_t i = 1; i < similar.size(); i++)
     {
         CHECK(similar[i - 1].score >= similar[i].score);          // sorted best first

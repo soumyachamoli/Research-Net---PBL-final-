@@ -43,18 +43,33 @@ if [[ "${1:-}" == "test" ]]; then
 fi
 
 mkdir -p "$BUILD"
+JOBS="${JOBS:-2}"                       # parallel compiles (each needs ~1 GB RAM: httplib/json)
 OBJECTS=()
+PIDS=()
+failed=0
 for source in src/*.cpp; do
     object="$BUILD/$(basename "${source%.cpp}").o"
     OBJECTS+=("$object")
     # Recompile only when the source or any header is newer than the object file.
     if [[ ! -f "$object" || "$source" -nt "$object" || -n "$(find include -newer "$object" -print -quit)" ]]; then
         echo "compiling $source"
+        rm -f "$object"                 # a failed compile must not leave an old object behind
         # shellcheck disable=SC2086
         $CXX $CXXFLAGS "${PG_FLAGS[@]}" -c "$source" -o "$object" &
+        PIDS+=($!)
+        if (( ${#PIDS[@]} >= JOBS )); then
+            wait "${PIDS[0]}" || failed=1
+            PIDS=("${PIDS[@]:1}")
+        fi
     fi
 done
-wait
+for pid in "${PIDS[@]}"; do
+    wait "$pid" || failed=1
+done
+if (( failed )); then
+    echo "build failed" >&2
+    exit 1
+fi
 # shellcheck disable=SC2086
 $CXX $CXXFLAGS "${OBJECTS[@]}" -o "researchnet$EXE" "${PG_LIBS[@]}"
 echo "built ./researchnet$EXE"

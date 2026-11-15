@@ -5,7 +5,7 @@ using namespace std;
 using json = nlohmann::json;
 
 WebServer::WebServer(const Config& config, Database& db, EngineHolder& engines)
-    : config_(config), db_(db), engines_(engines), papers_(db), users_(db)
+    : config_(config), db_(db), engines_(engines), papers_(db), users_(db), activity_(db)
 {
     // The website: index.html, app.js, style.css from the web/ folder.
     if (!server_.set_mount_point("/", config_.webRoot))
@@ -86,6 +86,7 @@ WebServer::WebServer(const Config& config, Database& db, EngineHolder& engines)
 
     registerPaperRoutes();
     registerAuthRoutes();
+    registerUserRoutes();
 }
 
 // ------------------------------------------------------------ sessions
@@ -205,14 +206,6 @@ void LoginLimiter::reset(const string& client)
 {
     lock_guard<mutex> lock(mutex_);
     failures_.erase(client);
-}
-
-void WebServer::onSearch(int, const string&, const PaperFilter&, long)
-{
-}
-
-void WebServer::onPaperViewed(int, int)
-{
 }
 
 bool WebServer::start()

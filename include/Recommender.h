@@ -27,7 +27,8 @@ struct Recommendation
 {
     int paperId = 0;
     double score = 0;          // combined score, 0..1
-    double content = 0;
+    double similarity = 0;    // raw TF-IDF cosine similarity (before normalization)
+    double content = 0;       // components below are normalized to 0..1
     double keywords = 0;
     double authors = 0;
     double recency = 0;
@@ -62,6 +63,7 @@ private:
     double recencyScore(const Paper& paper) const;
     double impactScore(const Paper& paper) const;
     double combine(Recommendation& rec) const;
+    std::vector<Recommendation> rank(std::vector<Recommendation>& candidates, size_t count) const;
     std::vector<Recommendation> topK(std::vector<Recommendation>& candidates, size_t count) const;
 };
 
