@@ -1,116 +1,190 @@
 #include "Database.h"
-#include "TextUtils.h"
-#include <cstdio>
 #include <cstdlib>
-#include <cstring>
-#include <fstream>
 #include <iostream>
+#include <sstream>
 using namespace std;
 
-Database::Database()
+// ------------------------------------------------------------ Result
+
+Result::Result(PGresult* result) : result_(result, PQclear)   // PQclear frees libpq's memory
 {
-    conn = nullptr;
+}
+
+int Result::rows() const
+{
+    return PQntuples(result_.get());
+}
+
+int Result::column(const string& name) const
+{
+    int index = PQfnumber(result_.get(), name.c_str());
+    if (index < 0)
+    {
+        throw logic_error("query result has no column " + name);
+    }
+    return index;
+}
+
+bool Result::isNull(int row, const string& name) const
+{
+    return PQgetisnull(result_.get(), row, column(name)) == 1;
+}
+
+string Result::text(int row, const string& name) const
+{
+    return PQgetvalue(result_.get(), row, column(name));      // libpq gives every value as text
+}
+
+int Result::integer(int row, const string& name) const
+{
+    return isNull(row, name) ? 0 : atoi(text(row, name).c_str());
+}
+
+optional<double> Result::number(int row, const string& name) const
+{
+    if (isNull(row, name))
+    {
+        return nullopt;
+    }
+    return strtod(text(row, name).c_str(), nullptr);
+}
+
+bool Result::boolean(int row, const string& name) const
+{
+    return text(row, name) == "t";
+}
+
+// ------------------------------------------------------------ Database
+
+Database::Database(const string& connectionInfo, int poolSize) : connectionInfo_(connectionInfo)
+{
+    for (int i = 0; i < poolSize; i++)
+    {
+        PGconn* conn = PQconnectdb(connectionInfo.c_str());
+        if (PQstatus(conn) != CONNECTION_OK)
+        {
+            string message = PQerrorMessage(conn);
+            PQfinish(conn);
+            for (PGconn* open : all_)
+            {
+                PQfinish(open);
+            }
+            throw DatabaseError("Connection to PostgreSQL failed: " + message, "");
+        }
+        all_.push_back(conn);
+        idle_.push_back(conn);
+    }
 }
 
 Database::~Database()
 {
-    disconnect();
-}
-
-// The config file contains ONE line, in libpq's own format, for example:
-//   host=localhost port=5432 dbname=researchnet user=postgres password=my_password
-// The file is listed in .gitignore, so the password never goes to GitHub.
-bool Database::connect(const char* configFile)
-{
-    ifstream file(configFile);
-    if (!file)
-    {
-        cout << "Cannot open " << configFile << ". Copy config.example.txt to config.txt first." << endl;
-        return false;
-    }
-    char connectionInfo[500];
-    file.getline(connectionInfo, sizeof(connectionInfo));
-
-    conn = PQconnectdb(connectionInfo);
-    if (PQstatus(conn) != CONNECTION_OK)
-    {
-        cout << "Connection to PostgreSQL failed: " << PQerrorMessage(conn) << endl;
-        disconnect();
-        return false;
-    }
-    return true;
-}
-
-// Copies one row of the query result into a Paper struct.
-// libpq gives every value as text, so numbers are converted with atoi / atof.
-// Column order: id, title, authors, keywords, abstract_text, publication_year,
-//               impact_factor, quartile, journal, url
-void Database::fillPaper(PGresult* result, int row, Paper& paper)
-{
-    paper.id = atoi(PQgetvalue(result, row, 0));
-    copyText(paper.title, PQgetvalue(result, row, 1), TITLE_SIZE);
-    copyText(paper.authors, PQgetvalue(result, row, 2), AUTHORS_SIZE);
-    copyText(paper.keywords, PQgetvalue(result, row, 3), KEYWORDS_SIZE);
-    copyText(paper.abstractText, PQgetvalue(result, row, 4), ABSTRACT_SIZE);
-    paper.year = atoi(PQgetvalue(result, row, 5));
-    paper.impactFactor = (float)atof(PQgetvalue(result, row, 6));
-    copyText(paper.quartile, PQgetvalue(result, row, 7), QUARTILE_SIZE);
-    copyText(paper.journal, PQgetvalue(result, row, 8), JOURNAL_SIZE);
-    copyText(paper.url, PQgetvalue(result, row, 9), URL_SIZE);
-}
-
-int Database::getPapers(Paper*& papers)
-{
-    PGresult* result = PQexec(conn,
-        "SELECT id, title, authors, keywords, abstract_text, COALESCE(publication_year, 0), "
-        "COALESCE(impact_factor, 0), COALESCE(quartile, ''), COALESCE(journal, ''), COALESCE(url, '') "
-        "FROM papers ORDER BY id");
-
-    if (PQresultStatus(result) != PGRES_TUPLES_OK)
-    {
-        cout << "Query failed: " << PQerrorMessage(conn) << endl;
-        PQclear(result);
-        return -1;
-    }
-
-    int rows = PQntuples(result);
-    papers = new Paper[rows];             // one Paper struct per row
-    for (int i = 0; i < rows; i++)
-    {
-        fillPaper(result, i, papers[i]);
-    }
-    PQclear(result);                      // free the memory libpq used for the result
-    return rows;
-}
-
-bool Database::searchPaperById(int id, Paper& paper)
-{
-    char idText[20];
-    snprintf(idText, sizeof(idText), "%d", id);
-    const char* params[1] = {idText};
-
-    // $1 is a parameter: the id is sent separately from the SQL (safe from SQL injection).
-    PGresult* result = PQexecParams(conn,
-        "SELECT id, title, authors, keywords, abstract_text, COALESCE(publication_year, 0), "
-        "COALESCE(impact_factor, 0), COALESCE(quartile, ''), COALESCE(journal, ''), COALESCE(url, '') "
-        "FROM papers WHERE id = $1",
-        1, nullptr, params, nullptr, nullptr, 0);
-
-    bool found = false;
-    if (PQresultStatus(result) == PGRES_TUPLES_OK && PQntuples(result) == 1)
-    {
-        fillPaper(result, 0, paper);
-        found = true;
-    }
-    PQclear(result);
-    return found;
-}
-
-void Database::disconnect()
-{
-    if (conn != nullptr)
+    for (PGconn* conn : all_)
     {
         PQfinish(conn);
-        conn = nullptr;
     }
+}
+
+// Waits until a connection is free. A connection that was dropped (e.g. the database
+// restarted) is reconnected before it is handed out.
+PGconn* Database::acquire()
+{
+    unique_lock<mutex> lock(mutex_);
+    available_.wait(lock, [this] { return !idle_.empty(); });
+    PGconn* conn = idle_.back();
+    idle_.pop_back();
+    lock.unlock();
+
+    if (PQstatus(conn) != CONNECTION_OK)
+    {
+        PQreset(conn);
+    }
+    return conn;
+}
+
+void Database::release(PGconn* conn)
+{
+    {
+        lock_guard<mutex> lock(mutex_);
+        idle_.push_back(conn);
+    }
+    available_.notify_one();
+}
+
+Result Database::query(const string& sql, const Params& params)
+{
+    vector<const char*> values;
+    for (const Param& p : params)
+    {
+        values.push_back(p ? p->c_str() : nullptr);
+    }
+
+    PGconn* conn = acquire();
+    PGresult* raw = PQexecParams(conn, sql.c_str(), (int)values.size(), nullptr,
+                                 values.empty() ? nullptr : values.data(), nullptr, nullptr, 0);
+    // A broken connection fails the query once; reconnect and try one more time.
+    if (PQstatus(conn) != CONNECTION_OK)
+    {
+        PQclear(raw);
+        PQreset(conn);
+        raw = PQexecParams(conn, sql.c_str(), (int)values.size(), nullptr,
+                           values.empty() ? nullptr : values.data(), nullptr, nullptr, 0);
+    }
+    Result result(raw);
+    ExecStatusType status = PQresultStatus(raw);
+    if (status != PGRES_TUPLES_OK && status != PGRES_COMMAND_OK)
+    {
+        const char* state = PQresultErrorField(raw, PG_DIAG_SQLSTATE);
+        string message = PQresultErrorMessage(raw);
+        if (message.empty())
+        {
+            message = PQerrorMessage(conn);
+        }
+        release(conn);
+        throw DatabaseError(message, state ? state : "");
+    }
+    release(conn);
+    return result;
+}
+
+// ------------------------------------------------------------ parameters
+
+Param toParam(int value)
+{
+    return to_string(value);
+}
+
+Param toParam(double value)
+{
+    ostringstream text;
+    text.precision(10);
+    text << value;
+    return text.str();
+}
+
+Param toParam(const string& value)
+{
+    return value;
+}
+
+Param toArrayParam(const vector<int>& values)
+{
+    string text = "{";
+    for (size_t i = 0; i < values.size(); i++)
+    {
+        text += (i > 0 ? "," : "") + to_string(values[i]);
+    }
+    return text + "}";
+}
+
+Param toArrayParam(const vector<double>& values)
+{
+    ostringstream text;
+    text.precision(10);
+    text << "{";
+    for (size_t i = 0; i < values.size(); i++)
+    {
+        text << (i > 0 ? "," : "") << values[i];
+    }
+    text << "}";
+    return text.str();
 }
