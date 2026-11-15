@@ -52,41 +52,65 @@ WebServer::WebServer(const Config& config, Database& db, EngineHolder& engines)
         }
     });
 
-    // Protection against cross-site requests: a request that changes data (POST, PUT,
-    // DELETE) must come from our own pages. Browsers always send Origin on those, and the
-    // session cookie is SameSite=Lax as a second layer.
-    server_.set_pre_routing_handler([](const httplib::Request& req, httplib::Response& res) {
-        if (req.method == "GET" || req.method == "HEAD")
-        {
-            return httplib::Server::HandlerResponse::Unhandled;
-        }
-        string origin = req.get_header_value("Origin");
-        if (!origin.empty())
-        {
-            string host = req.get_header_value("X-Forwarded-Host");
-            if (host.empty())
-            {
-                host = req.get_header_value("Host");
-            }
-            size_t scheme = origin.find("://");
-            if (scheme == string::npos || origin.substr(scheme + 3) != host)
-            {
-                sendError(res, 403, "Cross-site request blocked");
-                return httplib::Server::HandlerResponse::Handled;
-            }
-        }
-        if ((req.method == "POST" || req.method == "PUT") && !req.body.empty() &&
-            req.get_header_value("Content-Type").find("application/json") != 0)
-        {
-            sendError(res, 415, "Send JSON (Content-Type: application/json)");
-            return httplib::Server::HandlerResponse::Handled;
-        }
-        return httplib::Server::HandlerResponse::Unhandled;
-    });
-
     registerPaperRoutes();
     registerAuthRoutes();
     registerUserRoutes();
+}
+
+// ------------------------------------------------------------ requests that change data
+
+// Protection against cross-site requests: a request that changes data (POST, PUT, DELETE)
+// must come from our own pages. Browsers always send Origin on those, and the session
+// cookie is SameSite=Lax as a second layer. Bodies must be JSON, which a plain HTML form
+// on another site cannot send. Checked inside the handler, after the body has been read.
+static bool rejectUnsafeRequest(const httplib::Request& req, httplib::Response& res)
+{
+    string origin = req.get_header_value("Origin");
+    if (!origin.empty())
+    {
+        string host = req.get_header_value("X-Forwarded-Host");
+        if (host.empty())
+        {
+            host = req.get_header_value("Host");
+        }
+        size_t scheme = origin.find("://");
+        if (scheme == string::npos || origin.substr(scheme + 3) != host)
+        {
+            sendError(res, 403, "Cross-site request blocked");
+            return true;
+        }
+    }
+    if (!req.body.empty() && req.get_header_value("Content-Type").find("application/json") != 0)
+    {
+        sendError(res, 415, "Send JSON (Content-Type: application/json)");
+        return true;
+    }
+    return false;
+}
+
+static httplib::Server::Handler guarded(httplib::Server::Handler handler)
+{
+    return [handler](const httplib::Request& req, httplib::Response& res) {
+        if (!rejectUnsafeRequest(req, res))
+        {
+            handler(req, res);
+        }
+    };
+}
+
+void WebServer::post(const string& pattern, httplib::Server::Handler handler)
+{
+    server_.Post(pattern, guarded(std::move(handler)));
+}
+
+void WebServer::put(const string& pattern, httplib::Server::Handler handler)
+{
+    server_.Put(pattern, guarded(std::move(handler)));
+}
+
+void WebServer::del(const string& pattern, httplib::Server::Handler handler)
+{
+    server_.Delete(pattern, guarded(std::move(handler)));
 }
 
 // ------------------------------------------------------------ sessions

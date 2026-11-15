@@ -54,6 +54,11 @@ private:
     void registerAuthRoutes();
     void registerUserRoutes();
 
+    // Register a route that changes data; cross-site and non-JSON requests are rejected first.
+    void post(const std::string& pattern, httplib::Server::Handler handler);
+    void put(const std::string& pattern, httplib::Server::Handler handler);
+    void del(const std::string& pattern, httplib::Server::Handler handler);
+
     // Logged-in user of a request (from the session cookie), if any.
     std::optional<User> currentUser(const httplib::Request& req);
     int currentUserId(const httplib::Request& req);

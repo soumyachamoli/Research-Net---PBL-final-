@@ -144,6 +144,7 @@ def short_id(url):
 
 TAG_RE = re.compile(r"<[^>]+>")
 SPACE_RE = re.compile(r"\s+")
+ABSTRACT_LABEL_RE = re.compile(r"^(abstract|summary)\b[\s.:—-]*", re.IGNORECASE)
 
 
 def clean_text(text):
@@ -162,7 +163,9 @@ def rebuild_abstract(inverted):
     for word, positions in inverted.items():
         for p in positions:
             slots[p] = word
-    return clean_text(" ".join(slots[i] for i in sorted(slots)))
+    text = clean_text(" ".join(slots[i] for i in sorted(slots)))
+    # Some publishers put the word "Abstract" in front of the text itself.
+    return ABSTRACT_LABEL_RE.sub("", text) if text else None
 
 
 def clean_work(w, category, sources, retrieved):

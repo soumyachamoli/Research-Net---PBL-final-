@@ -50,18 +50,32 @@ def upsert_journals(cur, papers):
 
 
 def upsert_authors(cur, papers):
-    authors = {}
+    """Returns (OpenAlex id -> author id, name -> author id for authors without an OpenAlex id).
+
+    OpenAlex leaves the author id empty for some authorships; those authors are kept by
+    name (openalex_id stays NULL) instead of being dropped.
+    """
+    authors, unidentified = {}, set()
     for p in papers:
         for a in p["authors"]:
             if a.get("openalex_id"):
                 authors[a["openalex_id"]] = a["name"]
+            else:
+                unidentified.add(a["name"])
     cur.executemany(
         """INSERT INTO authors (openalex_id, name) VALUES (%s, %s)
            ON CONFLICT (openalex_id) DO UPDATE SET name = EXCLUDED.name
            WHERE authors.name IS DISTINCT FROM EXCLUDED.name""",
         list(authors.items()))
     cur.execute("SELECT openalex_id, id FROM authors WHERE openalex_id IS NOT NULL")
-    return dict(cur.fetchall())
+    by_openalex = dict(cur.fetchall())
+
+    cur.execute("SELECT name, id FROM authors WHERE openalex_id IS NULL")
+    by_name = dict(cur.fetchall())
+    cur.executemany("INSERT INTO authors (name) VALUES (%s)", [(n,) for n in sorted(unidentified - set(by_name))])
+    cur.execute("SELECT name, id FROM authors WHERE openalex_id IS NULL")
+    by_name = dict(cur.fetchall())
+    return by_openalex, by_name
 
 
 def upsert_keywords(cur, papers):
@@ -113,9 +127,9 @@ def main():
             with open(SCHEMA_FILE, encoding="utf-8") as f:
                 cur.execute(f.read())                    # make sure the tables exist
             journal_ids = upsert_journals(cur, papers)
-            author_ids = upsert_authors(cur, papers)
+            author_ids, unidentified_author_ids = upsert_authors(cur, papers)
             keyword_ids = upsert_keywords(cur, papers)
-            print(f"Journals: {len(journal_ids)}, authors: {len(author_ids)}, keywords: {len(keyword_ids)}")
+            print(f"Journals: {len(journal_ids)}, authors: {len(author_ids) + len(unidentified_author_ids)}, keywords: {len(keyword_ids)}")
 
             for start in range(0, len(papers), BATCH):
                 batch = papers[start:start + BATCH]
@@ -130,6 +144,12 @@ def main():
                 paper_ids = dict(cur.fetchall())
                 ids = list(paper_ids.values())
 
+                # Remember the current links, to see afterwards which papers really changed.
+                cur.execute("SELECT paper_id, author_id, position FROM paper_authors WHERE paper_id = ANY(%s)", (ids,))
+                old_a = set(cur.fetchall())
+                cur.execute("SELECT paper_id, keyword_id FROM paper_keywords WHERE paper_id = ANY(%s)", (ids,))
+                old_k = set(cur.fetchall())
+
                 # Rebuild the link tables for this batch so they match the dataset exactly.
                 cur.execute("DELETE FROM paper_authors WHERE paper_id = ANY(%s)", (ids,))
                 cur.execute("DELETE FROM paper_keywords WHERE paper_id = ANY(%s)", (ids,))
@@ -138,7 +158,8 @@ def main():
                     pid = paper_ids[p["doi"]]
                     seen = set()
                     for pos, a in enumerate(p["authors"], start=1):
-                        aid = author_ids.get(a.get("openalex_id"))
+                        aid = (author_ids.get(a["openalex_id"]) if a.get("openalex_id")
+                               else unidentified_author_ids.get(a["name"]))
                         if aid and aid not in seen:
                             seen.add(aid)
                             links_a.append((pid, aid, pos))
@@ -146,6 +167,11 @@ def main():
                         links_k.append((pid, keyword_ids[k]))
                 cur.executemany("INSERT INTO paper_authors (paper_id, author_id, position) VALUES (%s, %s, %s)", links_a)
                 cur.executemany("INSERT INTO paper_keywords (paper_id, keyword_id) VALUES (%s, %s)", links_k)
+                # Papers whose authors or keywords changed get a new updated_at, so the
+                # running server notices and rebuilds its index.
+                changed = {row[0] for row in old_a ^ set(links_a)} | {row[0] for row in old_k ^ set(links_k)}
+                if changed:
+                    cur.execute("UPDATE papers SET updated_at = now() WHERE id = ANY(%s)", (list(changed),))
                 conn.commit()
                 print(f"  {min(start + BATCH, len(papers))}/{len(papers)} papers")
 

@@ -62,7 +62,7 @@ static string checkName(const string& rawName)
 void WebServer::registerAuthRoutes()
 {
     // POST /api/register  {"name", "email", "password", "confirmPassword" (optional)}
-    server_.Post("/api/register", [this](const httplib::Request& req, httplib::Response& res) {
+    post("/api/register", [this](const httplib::Request& req, httplib::Response& res) {
         json body = jsonBody(req);
         string name = checkName(jsonText(body, "name", 200));
         string email = normalizeEmail(jsonText(body, "email", 300));
@@ -88,7 +88,7 @@ void WebServer::registerAuthRoutes()
     });
 
     // POST /api/login  {"email", "password"}
-    server_.Post("/api/login", [this](const httplib::Request& req, httplib::Response& res) {
+    post("/api/login", [this](const httplib::Request& req, httplib::Response& res) {
         string client = clientAddress(req);
         if (loginLimiter_.blocked(client))
         {
@@ -115,7 +115,7 @@ void WebServer::registerAuthRoutes()
         sendJson(res, 200, {{"user", userJson(*user)}});
     });
 
-    server_.Post("/api/logout", [this](const httplib::Request& req, httplib::Response& res) {
+    post("/api/logout", [this](const httplib::Request& req, httplib::Response& res) {
         string cookies = req.get_header_value("Cookie");
         size_t at = cookies.find("rn_session=");
         if (at != string::npos)

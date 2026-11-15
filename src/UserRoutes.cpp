@@ -162,7 +162,7 @@ void WebServer::registerUserRoutes()
         }
     });
 
-    server_.Post("/api/bookmarks", [this](const httplib::Request& req, httplib::Response& res) {
+    post("/api/bookmarks", [this](const httplib::Request& req, httplib::Response& res) {
         optional<User> user = requireUser(req, res);
         if (!user)
         {
@@ -182,7 +182,7 @@ void WebServer::registerUserRoutes()
         sendJson(res, 201, {{"paperId", paperId}, {"bookmarked", true}});
     });
 
-    server_.Delete(R"(/api/bookmarks/(\d+))", [this](const httplib::Request& req, httplib::Response& res) {
+    del(R"(/api/bookmarks/(\d+))", [this](const httplib::Request& req, httplib::Response& res) {
         optional<User> user = requireUser(req, res);
         if (!user)
         {
@@ -211,7 +211,7 @@ void WebServer::registerUserRoutes()
         }
     });
 
-    server_.Delete("/api/history", [this](const httplib::Request& req, httplib::Response& res) {
+    del("/api/history", [this](const httplib::Request& req, httplib::Response& res) {
         optional<User> user = requireUser(req, res);
         if (user)
         {
@@ -220,7 +220,7 @@ void WebServer::registerUserRoutes()
         }
     });
 
-    server_.Delete(R"(/api/history/searches/(\d+))", [this](const httplib::Request& req, httplib::Response& res) {
+    del(R"(/api/history/searches/(\d+))", [this](const httplib::Request& req, httplib::Response& res) {
         optional<User> user = requireUser(req, res);
         if (!user)
         {
@@ -234,7 +234,7 @@ void WebServer::registerUserRoutes()
         sendJson(res, 200, {{"ok", true}});
     });
 
-    server_.Delete(R"(/api/history/views/(\d+))", [this](const httplib::Request& req, httplib::Response& res) {
+    del(R"(/api/history/views/(\d+))", [this](const httplib::Request& req, httplib::Response& res) {
         optional<User> user = requireUser(req, res);
         if (!user)
         {
@@ -266,7 +266,7 @@ void WebServer::registerUserRoutes()
     });
 
     // PUT /api/profile  {"name", "interests": [...]}  (both optional)
-    server_.Put("/api/profile", [this](const httplib::Request& req, httplib::Response& res) {
+    put("/api/profile", [this](const httplib::Request& req, httplib::Response& res) {
         optional<User> user = requireUser(req, res);
         if (!user)
         {
@@ -294,7 +294,7 @@ void WebServer::registerUserRoutes()
     });
 
     // PUT /api/profile/password  {"currentPassword", "newPassword"}
-    server_.Put("/api/profile/password", [this](const httplib::Request& req, httplib::Response& res) {
+    put("/api/profile/password", [this](const httplib::Request& req, httplib::Response& res) {
         optional<User> user = requireUser(req, res);
         if (!user)
         {
