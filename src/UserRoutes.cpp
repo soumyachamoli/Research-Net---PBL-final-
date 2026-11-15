@@ -1,12 +1,9 @@
-// Routes for a logged-in user's own data: bookmarks, history, profile, recommendations.
-// Similar papers (/api/papers/:id/similar) are public.
 #include "HttpUtils.h"
 #include "Recommender.h"
 #include "WebServer.h"
 using namespace std;
 using json = nlohmann::json;
 
-// Paper cards + when they were saved/viewed, in the given order.
 static json papersWithTime(PaperRepository& papers, const vector<pair<int, string>>& items, int userId,
                            const char* timeField)
 {
@@ -25,7 +22,6 @@ static json papersWithTime(PaperRepository& papers, const vector<pair<int, strin
     return list;
 }
 
-// Recommendation results as JSON: the paper card, the score and how it was computed.
 static json recommendationsJson(PaperRepository& papers, const vector<Recommendation>& recs, int userId)
 {
     vector<int> ids;
@@ -90,7 +86,6 @@ static vector<string> readInterests(const json& body)
 
 void WebServer::onSearch(int userId, const string& query, const PaperFilter& filter, long resultCount)
 {
-    // Only real searches on the first page (not every page turn) go into the history.
     if (userId > 0 && filter.page == 1 && (!query.empty() || filter.hasAnyFilter()))
     {
         activity_.recordSearch(userId, query, filter.toJson(), resultCount);
@@ -107,7 +102,6 @@ void WebServer::onPaperViewed(int userId, int paperId)
 
 void WebServer::registerUserRoutes()
 {
-    // ---------------------------------------------------------------- recommendations
 
     server_.Get(R"(/api/papers/(\d+)/similar)", [this](const httplib::Request& req, httplib::Response& res) {
         int paperId = stoi(req.matches[1]);
@@ -151,7 +145,6 @@ void WebServer::registerUserRoutes()
         });
     });
 
-    // ---------------------------------------------------------------- bookmarks
 
     server_.Get("/api/bookmarks", [this](const httplib::Request& req, httplib::Response& res) {
         optional<User> user = requireUser(req, res);
@@ -197,7 +190,6 @@ void WebServer::registerUserRoutes()
         sendJson(res, 200, {{"paperId", paperId}, {"bookmarked", false}});
     });
 
-    // ---------------------------------------------------------------- history
 
     server_.Get("/api/history", [this](const httplib::Request& req, httplib::Response& res) {
         optional<User> user = requireUser(req, res);
@@ -248,7 +240,6 @@ void WebServer::registerUserRoutes()
         sendJson(res, 200, {{"ok", true}});
     });
 
-    // ---------------------------------------------------------------- profile
 
     server_.Get("/api/profile", [this](const httplib::Request& req, httplib::Response& res) {
         optional<User> user = requireUser(req, res);
@@ -265,7 +256,6 @@ void WebServer::registerUserRoutes()
         });
     });
 
-    // PUT /api/profile  {"name", "interests": [...]}  (both optional)
     put("/api/profile", [this](const httplib::Request& req, httplib::Response& res) {
         optional<User> user = requireUser(req, res);
         if (!user)
@@ -293,7 +283,6 @@ void WebServer::registerUserRoutes()
         });
     });
 
-    // PUT /api/profile/password  {"currentPassword", "newPassword"}
     put("/api/profile/password", [this](const httplib::Request& req, httplib::Response& res) {
         optional<User> user = requireUser(req, res);
         if (!user)
@@ -312,7 +301,6 @@ void WebServer::registerUserRoutes()
             sendError(res, 403, "Current password is wrong");
             return;
         }
-        // All sessions were ended; give this browser a fresh one.
         setSessionCookie(res, users_.createSession(user->id, 7), 7 * 86400);
         sendJson(res, 200, {{"ok", true}});
     });

@@ -1,5 +1,3 @@
-// test_index.cpp
-// Build and run all unit tests:  ./build.sh test
 #include "check.h"
 #include "InvertedIndex.h"
 #include "SearchEngine.h"
@@ -21,19 +19,18 @@ static void testInvertedIndex()
     CHECK(index.termCount() == 4);
     CHECK(index.documentFrequency(index.termId("network")) == 2);
     CHECK(index.termId("missing") == -1);
-    CHECK(index.idf(index.termId("vision")) > index.idf(index.termId("network")));   // rarer = higher
+    CHECK(index.idf(index.termId("vision")) > index.idf(index.termId("network")));
 
-    // Every document vector has length 1, so dot(a, a) == 1.
     for (int d = 0; d < 3; d++)
     {
         CHECK(fabs(dot(index.documentVector(d), index.documentVector(d)) - 1.0) < 1e-5);
     }
 
-    auto both = index.search({"neural", "network"}, true);          // AND
+    auto both = index.search({"neural", "network"}, true);
     CHECK(both.size() == 1 && both[0].first == 0);
-    auto either = index.search({"neural", "network"}, false);       // OR
+    auto either = index.search({"neural", "network"}, false);
     CHECK(either.size() == 3);
-    CHECK(either[0].first == 0);                                    // matches both words: ranked first
+    CHECK(either[0].first == 0);
     CHECK(index.search({"neural", "missing"}, true).empty());
     CHECK(index.search({"neural", "missing"}, false).size() == 2);
     CHECK(index.search({}, false).empty());
@@ -64,7 +61,6 @@ static Paper makePaper(int id, const string& title, const string& abstractText, 
 
 static vector<Paper> samplePapers()
 {
-    // Small hand-written fixtures for the tests only (the real data comes from OpenAlex).
     return {
         makePaper(1, "Convolutional neural networks for image classification",
                   "We train deep convolutional neural networks on large image datasets.", 2015, {1, 2},
@@ -93,23 +89,23 @@ static void testSearchEngine()
     CHECK(engine.minYear() == 2012 && engine.maxYear() == 2021);
     CHECK(engine.maxImpactFactor() == 40);
 
-    auto hits = engine.search("image networks");                 // AND (topic words count too)
+    auto hits = engine.search("image networks");
     CHECK(hits.size() == 3);
     for (const auto& hit : hits)
     {
-        CHECK(hit.paperId <= 3);                                 // networking papers have no "image"
+        CHECK(hit.paperId <= 3);
     }
-    auto anyHits = engine.search("transformers OR routing");     // OR
+    auto anyHits = engine.search("transformers OR routing");
     CHECK(anyHits.size() == 3);
-    CHECK(engine.search("Transformer").size() == 1);             // stemming + case-insensitive
-    CHECK(engine.search("the of and").empty());                  // only stop words
-    auto byAuthor = engine.search("author");                     // author names are indexed
+    CHECK(engine.search("Transformer").size() == 1);
+    CHECK(engine.search("the of and").empty());
+    auto byAuthor = engine.search("author");
     CHECK(byAuthor.size() == 5);
 
     auto suggestions = engine.autocomplete("ima", 10);
     CHECK(!suggestions.empty() && suggestions[0].text == "image classification");
-    CHECK(!engine.autocomplete("author 2", 5).empty());          // author of two papers
-    CHECK(engine.autocomplete("author 4", 5).empty());           // only one paper: not suggested
+    CHECK(!engine.autocomplete("author 2", 5).empty());
+    CHECK(engine.autocomplete("author 4", 5).empty());
 }
 
 int main()

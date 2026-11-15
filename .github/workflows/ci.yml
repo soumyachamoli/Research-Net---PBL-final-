@@ -1,5 +1,3 @@
-# Builds and tests ResearchNet on Linux on every push:
-# unit tests -> PostgreSQL + data import -> API end-to-end tests -> Docker image build.
 name: CI
 
 on:

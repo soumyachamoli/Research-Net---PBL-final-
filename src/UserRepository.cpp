@@ -1,7 +1,7 @@
 #include "UserRepository.h"
 using namespace std;
 
-static const char* BCRYPT_COST = "10";      // 2^10 rounds: about 50-100 ms per hash
+static const char* BCRYPT_COST = "10";
 
 static User readUser(const Result& r, int row)
 {
@@ -14,8 +14,6 @@ UserRepository::UserRepository(Database& db) : db_(db)
 
 optional<User> UserRepository::create(const string& name, const string& email, const string& password)
 {
-    // The unique index on lower(email) makes duplicate accounts impossible, even when two
-    // registrations for the same email arrive at the same moment.
     Result r = db_.query(R"(
         INSERT INTO users (full_name, email, password_hash)
         VALUES ($1, $2, crypt($3, gen_salt('bf', $4::int)))
@@ -37,8 +35,6 @@ optional<User> UserRepository::verifyPassword(const string& email, const string&
         {email, password});
     if (r.rows() == 0)
     {
-        // Unknown email: still compute one bcrypt hash, so the response takes as long as
-        // for a wrong password and does not reveal which emails have accounts.
         db_.query("SELECT crypt($1, gen_salt('bf', $2::int))", {password, string(BCRYPT_COST)});
         return nullopt;
     }
@@ -58,7 +54,6 @@ string UserRepository::createSession(int userId, int days)
                 SELECT digest(value, 'sha256'), $1, now() + make_interval(days => $2) FROM token)
         SELECT value FROM token)",
         {toParam(userId), toParam(days)});
-    // Old sessions of everyone are cleaned up now and then.
     db_.query("DELETE FROM sessions WHERE expires_at < now()");
     return r.text(0, "value");
 }
@@ -108,7 +103,6 @@ bool UserRepository::changePassword(int userId, const string& currentPassword, c
     {
         return false;
     }
-    // Log out every other session after a password change.
     db_.query("DELETE FROM sessions WHERE user_id = $1", {toParam(userId)});
     return true;
 }

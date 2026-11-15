@@ -7,13 +7,11 @@ using json = nlohmann::json;
 WebServer::WebServer(const Config& config, Database& db, EngineHolder& engines)
     : config_(config), db_(db), engines_(engines), papers_(db), users_(db), activity_(db)
 {
-    // The website: index.html, app.js, style.css from the web/ folder.
     if (!server_.set_mount_point("/", config_.webRoot))
     {
         cerr << "Warning: web folder '" << config_.webRoot << "' not found" << endl;
     }
 
-    // Security headers on every response. The page only loads its own scripts and styles.
     server_.set_default_headers({
         {"X-Content-Type-Options", "nosniff"},
         {"Referrer-Policy", "strict-origin-when-cross-origin"},
@@ -22,7 +20,6 @@ WebServer::WebServer(const Config& config, Database& db, EngineHolder& engines)
          "default-src 'self'; img-src 'self' data:; object-src 'none'; base-uri 'none'; frame-ancestors 'none'"},
     });
 
-    // Any exception inside a handler ends up here instead of crashing the server.
     server_.set_exception_handler([](const httplib::Request& req, httplib::Response& res, exception_ptr error) {
         try
         {
@@ -44,7 +41,6 @@ WebServer::WebServer(const Config& config, Database& db, EngineHolder& engines)
         }
     });
 
-    // Unknown /api/ routes answer in JSON like the rest of the API.
     server_.set_error_handler([](const httplib::Request& req, httplib::Response& res) {
         if (req.path.rfind("/api/", 0) == 0 && res.body.empty())
         {
@@ -57,12 +53,7 @@ WebServer::WebServer(const Config& config, Database& db, EngineHolder& engines)
     registerUserRoutes();
 }
 
-// ------------------------------------------------------------ requests that change data
 
-// Protection against cross-site requests: a request that changes data (POST, PUT, DELETE)
-// must come from our own pages. Browsers always send Origin on those, and the session
-// cookie is SameSite=Lax as a second layer. Bodies must be JSON, which a plain HTML form
-// on another site cannot send. Checked inside the handler, after the body has been read.
 static bool rejectUnsafeRequest(const httplib::Request& req, httplib::Response& res)
 {
     string origin = req.get_header_value("Origin");
@@ -113,11 +104,9 @@ void WebServer::del(const string& pattern, httplib::Server::Handler handler)
     server_.Delete(pattern, guarded(std::move(handler)));
 }
 
-// ------------------------------------------------------------ sessions
 
 static const char* SESSION_COOKIE = "rn_session";
 
-// Finds rn_session=<64 hex characters> in the Cookie header.
 static string sessionToken(const httplib::Request& req)
 {
     string cookies = req.get_header_value("Cookie");
@@ -177,14 +166,12 @@ string WebServer::clientAddress(const httplib::Request& req) const
         string forwarded = req.get_header_value("X-Forwarded-For");
         if (!forwarded.empty())
         {
-            return trim(forwarded.substr(0, forwarded.find(',')));   // the original client
+            return trim(forwarded.substr(0, forwarded.find(',')));
         }
     }
     return req.remote_addr;
 }
 
-// HttpOnly: JavaScript cannot read the cookie. SameSite=Lax: other sites cannot send it
-// with their requests. Secure (production): only over HTTPS.
 void WebServer::setSessionCookie(httplib::Response& res, const string& token, int maxAgeSeconds)
 {
     string cookie = string(SESSION_COOKIE) + "=" + token + "; Path=/; HttpOnly; SameSite=Lax; Max-Age=" +
@@ -196,7 +183,6 @@ void WebServer::setSessionCookie(httplib::Response& res, const string& token, in
     res.set_header("Set-Cookie", cookie);
 }
 
-// ------------------------------------------------------------ login limiter
 
 static const size_t MAX_FAILED_LOGINS = 10;
 static const auto LOGIN_WINDOW = chrono::minutes(15);

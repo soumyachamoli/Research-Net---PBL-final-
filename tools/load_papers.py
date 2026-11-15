@@ -1,15 +1,3 @@
-"""
-Load the cleaned OpenAlex dataset into PostgreSQL.
-
-    pip install "psycopg[binary]"
-    python tools/load_papers.py "postgresql://user:pass@host:5432/researchnet"
-    python tools/load_papers.py            # uses $DATABASE_URL
-
-Repeatable: papers are matched by DOI, journals/authors by OpenAlex id and keywords
-by lower-case name, so running it twice does not create duplicates. Rows are only
-rewritten (and updated_at bumped) when the data actually changed, which is what the
-C++ server watches to know when to rebuild its Trie and inverted index.
-"""
 import gzip
 import json
 import os
@@ -50,11 +38,7 @@ def upsert_journals(cur, papers):
 
 
 def upsert_authors(cur, papers):
-    """Returns (OpenAlex id -> author id, name -> author id for authors without an OpenAlex id).
 
-    OpenAlex leaves the author id empty for some authorships; those authors are kept by
-    name (openalex_id stays NULL) instead of being dropped.
-    """
     authors, unidentified = {}, set()
     for p in papers:
         for a in p["authors"]:
@@ -85,12 +69,8 @@ def upsert_keywords(cur, papers):
             names.setdefault(k.lower(), k)
     cur.executemany("INSERT INTO keywords (name) VALUES (%s) ON CONFLICT ((lower(name))) DO NOTHING",
                     [(n,) for n in names.values()])
-    # Lower-case in Python, not SQL: PostgreSQL's lower() depends on the database locale
-    # (with the C locale it leaves letters like "Ł" unchanged).
     cur.execute("SELECT name, id FROM keywords")
     ids = {name.lower(): kid for name, kid in cur.fetchall()}
-    # The database may treat two spellings as the same keyword (its lower() can differ
-    # from Python's for some letters); those share the row PostgreSQL already has.
     for key, name in names.items():
         if key not in ids:
             cur.execute("SELECT id FROM keywords WHERE lower(name) = lower(%s)", (name,))
@@ -132,7 +112,7 @@ def main():
     with psycopg.connect(url) as conn:
         with conn.cursor() as cur:
             with open(SCHEMA_FILE, encoding="utf-8") as f:
-                cur.execute(f.read())                    # make sure the tables exist
+                cur.execute(f.read())
             journal_ids = upsert_journals(cur, papers)
             author_ids, unidentified_author_ids = upsert_authors(cur, papers)
             keyword_ids = upsert_keywords(cur, papers)
@@ -151,13 +131,11 @@ def main():
                 paper_ids = dict(cur.fetchall())
                 ids = list(paper_ids.values())
 
-                # Remember the current links, to see afterwards which papers really changed.
                 cur.execute("SELECT paper_id, author_id, position FROM paper_authors WHERE paper_id = ANY(%s)", (ids,))
                 old_a = set(cur.fetchall())
                 cur.execute("SELECT paper_id, keyword_id FROM paper_keywords WHERE paper_id = ANY(%s)", (ids,))
                 old_k = set(cur.fetchall())
 
-                # Rebuild the link tables for this batch so they match the dataset exactly.
                 cur.execute("DELETE FROM paper_authors WHERE paper_id = ANY(%s)", (ids,))
                 cur.execute("DELETE FROM paper_keywords WHERE paper_id = ANY(%s)", (ids,))
                 links_a, links_k = [], []
@@ -174,8 +152,6 @@ def main():
                         links_k.append((pid, keyword_ids[k]))
                 cur.executemany("INSERT INTO paper_authors (paper_id, author_id, position) VALUES (%s, %s, %s)", links_a)
                 cur.executemany("INSERT INTO paper_keywords (paper_id, keyword_id) VALUES (%s, %s)", links_k)
-                # Papers whose authors or keywords changed get a new updated_at, so the
-                # running server notices and rebuilds its index.
                 changed = {row[0] for row in old_a ^ set(links_a)} | {row[0] for row in old_k ^ set(links_k)}
                 if changed:
                     cur.execute("UPDATE papers SET updated_at = now() WHERE id = ANY(%s)", (list(changed),))

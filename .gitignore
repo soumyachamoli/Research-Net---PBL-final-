@@ -1,13 +1,10 @@
-# your real password lives here, never commit it
 config.txt
 .env
 
-# compiled program, objects and test binaries
 researchnet
 researchnet.exe
 build/
 
-# raw OpenAlex API pages (re-downloadable cache; the cleaned dataset is committed)
 data/raw/
 
 __pycache__/

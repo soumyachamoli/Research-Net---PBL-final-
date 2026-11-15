@@ -1,7 +1,4 @@
 #!/usr/bin/env bash
-# GitHub Codespaces setup: installs g++, PostgreSQL and libpq, creates the database,
-# imports the 10,319 OpenAlex papers, writes config.txt and compiles.
-# Safe to run again: the schema and the import never delete or duplicate data.
 set -euo pipefail
 
 echo "==> Installing g++, PostgreSQL, libpq and psycopg"
@@ -18,7 +15,6 @@ if ! sudo runuser -u postgres -- psql -tAc "SELECT 1 FROM pg_database WHERE datn
 fi
 cd - > /dev/null
 
-# Local development database only (inside the codespace); never used in production.
 URL="postgresql://postgres:postgres@localhost:5432/researchnet"
 echo "==> Creating tables and importing papers"
 python3 tools/load_papers.py "$URL"

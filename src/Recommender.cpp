@@ -9,7 +9,7 @@
 #include <unordered_set>
 using namespace std;
 
-static const double MIN_CONTENT = 0.05;   // below this, texts are treated as unrelated
+static const double MIN_CONTENT = 0.05;
 
 bool RecommenderWeights::parse(const string& text)
 {
@@ -51,7 +51,6 @@ Recommender::Recommender(const SearchEngine& engine, RecommenderWeights weights)
 {
 }
 
-// Newest paper in the collection -> 1, oldest -> 0.
 double Recommender::recencyScore(const Paper& paper) const
 {
     int span = engine_.maxYear() - engine_.minYear();
@@ -62,8 +61,6 @@ double Recommender::recencyScore(const Paper& paper) const
     return (double)(paper.year - engine_.minYear()) / span;
 }
 
-// Log scale, so a journal with impact 40 is not "4 times better" than one with impact 10.
-// Returns -1 when the impact factor is unknown.
 double Recommender::impactScore(const Paper& paper) const
 {
     if (!paper.impactFactor || engine_.maxImpactFactor() <= 0)
@@ -87,11 +84,6 @@ double Recommender::combine(Recommendation& rec) const
     return rec.score;
 }
 
-// Normalizes the components over this set of candidates, combines them, keeps the best.
-// Raw cosine values are small (0.1-0.4 for related papers) while recency is spread over
-// 0..1, so without this step the small-weight recency term could outweigh content.
-// Content, keyword and author scores are therefore divided by their maximum here: the
-// best match of THIS request gets 1. Recency and impact are already on a 0..1 scale.
 vector<Recommendation> Recommender::rank(vector<Recommendation>& candidates, size_t count) const
 {
     double maxContent = 0, maxKeywords = 0, maxAuthors = 0;
@@ -111,8 +103,6 @@ vector<Recommendation> Recommender::rank(vector<Recommendation>& candidates, siz
     return topK(candidates, count);
 }
 
-// Keeps the `count` best recommendations using a min-heap of size `count`:
-// the heap top is the weakest of the current best, and is replaced when a better one comes.
 vector<Recommendation> Recommender::topK(vector<Recommendation>& candidates, size_t count) const
 {
     auto weaker = [&](int a, int b) { return candidates[a].score > candidates[b].score; };
@@ -131,7 +121,7 @@ vector<Recommendation> Recommender::topK(vector<Recommendation>& candidates, siz
         best.push_back(candidates[heap.top()]);
         heap.pop();
     }
-    reverse(best.begin(), best.end());                 // highest score first
+    reverse(best.begin(), best.end());
     return best;
 }
 
@@ -155,8 +145,6 @@ static string joinFirst(const vector<string>& items, size_t limit)
     return text;
 }
 
-// Content similarity of `base` to every other paper, using the inverted index: only papers
-// that share at least one term are visited. Returns position -> cosine similarity.
 static unordered_map<int, double> contentScores(const SearchEngine& engine, const SparseVector& base)
 {
     unordered_map<int, double> scores;
@@ -180,8 +168,6 @@ vector<Recommendation> Recommender::similarTo(int paperId, size_t count) const
     const Paper& base = engine_.papers()[basePos];
     unordered_map<int, double> content = contentScores(engine_, engine_.index().documentVector(basePos));
 
-    // Papers by the same authors or with the same keywords are candidates even if
-    // their text happens to be different.
     for (int authorId : base.authorIds)
     {
         for (int pos : engine_.papersByAuthor(authorId))
@@ -205,7 +191,7 @@ vector<Recommendation> Recommender::similarTo(int paperId, size_t count) const
     {
         if (item.first == basePos)
         {
-            continue;                                  // never recommend the paper itself
+            continue;
         }
         const Paper& other = engine_.papers()[item.first];
 
@@ -233,13 +219,13 @@ vector<Recommendation> Recommender::similarTo(int paperId, size_t count) const
         rec.paperId = other.id;
         rec.content = min(1.0, item.second);
         rec.similarity = rec.content;
-        rec.keywords = keywordUnion > 0 ? (double)sharedKeywords.size() / keywordUnion : 0;   // Jaccard
+        rec.keywords = keywordUnion > 0 ? (double)sharedKeywords.size() / keywordUnion : 0;
         rec.authors = smallerTeam > 0 ? min(1.0, (double)sharedAuthors.size() / smallerTeam) : 0;
         rec.recency = recencyScore(other);
         rec.impact = impactScore(other);
         if (rec.content < MIN_CONTENT && sharedKeywords.empty() && sharedAuthors.empty())
         {
-            continue;                                  // not related at all
+            continue;
         }
 
         if (!sharedAuthors.empty())
@@ -271,9 +257,8 @@ vector<Recommendation> Recommender::forUser(const UserProfile& profile, size_t c
 {
     const InvertedIndex& index = engine_.index();
 
-    // 1. Build the user's interest vector: a weighted sum of TF-IDF vectors.
     unordered_map<int, double> profileTerms;
-    vector<int> sourcePositions;                       // saved first, then viewed
+    vector<int> sourcePositions;
     unordered_set<int> exclude;
     auto addVector = [&](const SparseVector& terms, double weight) {
         for (const auto& entry : terms)
@@ -311,7 +296,6 @@ vector<Recommendation> Recommender::forUser(const UserProfile& profile, size_t c
 
     vector<Recommendation> candidates;
 
-    // Nothing known about the user yet: recommend well-cited, recent papers.
     if (profileTerms.empty())
     {
         double maxCites = 1;
@@ -325,7 +309,7 @@ vector<Recommendation> Recommender::forUser(const UserProfile& profile, size_t c
             rec.paperId = paper.id;
             rec.recency = recencyScore(paper);
             rec.impact = impactScore(paper);
-            rec.content = log1p(paper.citedBy) / log1p(maxCites);   // popularity stands in for content
+            rec.content = log1p(paper.citedBy) / log1p(maxCites);
             rec.score = 0.7 * rec.content + 0.3 * rec.recency;
             rec.reasons.push_back("Highly cited in " + (paper.category.empty() ? "its field" : paper.category));
             candidates.push_back(rec);
@@ -333,7 +317,6 @@ vector<Recommendation> Recommender::forUser(const UserProfile& profile, size_t c
         return topK(candidates, count);
     }
 
-    // Keep the 60 strongest terms (enough to describe the interests, fast to search).
     SparseVector profileVector(profileTerms.begin(), profileTerms.end());
     sort(profileVector.begin(), profileVector.end(),
          [](const pair<int, float>& a, const pair<int, float>& b) { return a.second > b.second; });
@@ -353,7 +336,6 @@ vector<Recommendation> Recommender::forUser(const UserProfile& profile, size_t c
     }
     sort(profileVector.begin(), profileVector.end());
 
-    // Keywords and authors of the papers the user saved or opened.
     set<string> userKeywords;
     unordered_map<int, string> userAuthors;
     for (int pos : sourcePositions)
@@ -368,7 +350,6 @@ vector<Recommendation> Recommender::forUser(const UserProfile& profile, size_t c
             userAuthors[paper.authorIds[a]] = paper.authors[a];
         }
     }
-    // true if the document contains every analyzed term of a phrase.
     auto containsAll = [&](const SparseVector& docVector, const string& phrase) {
         vector<string> terms = analyze(phrase);
         for (const string& term : terms)
@@ -392,7 +373,7 @@ vector<Recommendation> Recommender::forUser(const UserProfile& profile, size_t c
     {
         if (exclude.count(item.first))
         {
-            continue;                                  // already saved or opened
+            continue;
         }
         const Paper& paper = engine_.papers()[item.first];
         const SparseVector& docVector = index.documentVector(item.first);
@@ -428,9 +409,8 @@ vector<Recommendation> Recommender::forUser(const UserProfile& profile, size_t c
             continue;
         }
 
-        // Explanations: which of the user's own papers / interests this matches.
         int bestSource = -1;
-        double bestSimilarity = 0.15;                  // only mention clearly similar papers
+        double bestSimilarity = 0.15;
         for (size_t s = 0; s < sourcePositions.size() && s < 20; s++)
         {
             double similarity = dot(docVector, index.documentVector(sourcePositions[s]));

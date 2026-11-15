@@ -18,7 +18,6 @@ bool ActivityRepository::addBookmark(int userId, int paperId)
     {
         return true;
     }
-    // Nothing inserted: either it was already saved (fine) or the paper does not exist.
     Result exists = db_.query("SELECT 1 FROM papers WHERE id = $1", {toParam(paperId)});
     return exists.rows() > 0;
 }
@@ -143,7 +142,6 @@ vector<string> ActivityRepository::interests(int userId)
 void ActivityRepository::setInterests(int userId, const vector<string>& interests)
 {
     json list = interests;
-    // Replace the whole list: delete the old interests, insert the new ones.
     db_.query("DELETE FROM user_interests WHERE user_id = $1", {toParam(userId)});
     db_.query("INSERT INTO user_interests (user_id, interest) "
               "SELECT DISTINCT $1::int, value FROM json_array_elements_text($2::json) AS value "

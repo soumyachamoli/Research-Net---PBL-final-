@@ -1,23 +1,3 @@
-"""
-Fetch genuine research-paper metadata from OpenAlex (https://openalex.org, CC0 data)
-and write a cleaned dataset to data/openalex_papers.jsonl.gz.
-
-    python tools/fetch_openalex.py            # fetch (resumes from data/raw/ cache)
-    python tools/fetch_openalex.py --per 500  # fewer papers per subfield
-
-What it does:
-  1. For each Computer Science subfield below, download the most-cited English
-     articles/reviews (2010-2025) that have an abstract and a DOI, 200 per request,
-     using OpenAlex cursor paging. Raw pages are cached in data/raw/, so re-running
-     does not hit the API again.
-  2. Look up each paper's journal/venue (OpenAlex "source") to get its
-     2-year mean citedness, an impact-factor-like journal metric.
-  3. Clean every record (rebuild the abstract, strip HTML from titles, drop
-     duplicates by DOI) and write one JSON object per line.
-
-Only the Python standard library is used. Nothing is generated or invented:
-every field comes from OpenAlex, and missing values stay missing (null).
-"""
 import argparse
 import gzip
 import html
@@ -36,7 +16,6 @@ ROOT = os.path.join(os.path.dirname(os.path.abspath(__file__)), "..")
 RAW_DIR = os.path.join(ROOT, "data", "raw")
 OUT_FILE = os.path.join(ROOT, "data", "openalex_papers.jsonl.gz")
 
-# OpenAlex subfield ids (Computer Science field = 17).
 SUBFIELDS = {
     1702: "Artificial Intelligence",
     1707: "Computer Vision and Pattern Recognition",
@@ -55,7 +34,6 @@ PAGE_SIZE = 200
 
 
 def api_url(endpoint, params):
-    """Build an OpenAlex URL. An optional free key (OPENALEX_API_KEY) raises the daily budget."""
     key = os.environ.get("OPENALEX_API_KEY")
     if key:
         params = dict(params, api_key=key)
@@ -63,7 +41,6 @@ def api_url(endpoint, params):
 
 
 def get_json(url, tries=6):
-    """GET a URL and parse JSON, backing off on rate limits (429) and server errors."""
     delay = 2.0
     for attempt in range(tries):
         try:
@@ -84,7 +61,6 @@ def get_json(url, tries=6):
 
 
 def fetch_subfield(subfield_id, per_subfield):
-    """Download (or read from cache) the top-cited works of one subfield."""
     cache = os.path.join(RAW_DIR, f"works_{subfield_id}_{per_subfield}.jsonl.gz")
     if os.path.exists(cache):
         with gzip.open(cache, "rt", encoding="utf-8") as f:
@@ -92,7 +68,6 @@ def fetch_subfield(subfield_id, per_subfield):
 
     flt = (f"primary_topic.subfield.id:{subfield_id},type:article|review,has_abstract:true,"
            f"has_doi:true,language:en,publication_year:2010-2025")
-    # Page-number paging (cursor paging needs an API key); fine for the first 10,000 results.
     works, page = [], 1
     while len(works) < per_subfield:
         params = {"filter": flt, "sort": "cited_by_count:desc", "per-page": PAGE_SIZE,
@@ -103,19 +78,18 @@ def fetch_subfield(subfield_id, per_subfield):
         works.extend(data["results"])
         page += 1
         print(f"  subfield {subfield_id}: {len(works)} works", file=sys.stderr)
-        time.sleep(0.3)                                  # be polite to the free API
+        time.sleep(0.3)
     works = works[:per_subfield]
 
     tmp = cache + ".tmp"
     with gzip.open(tmp, "wt", encoding="utf-8") as f:
         for w in works:
             f.write(json.dumps(w) + "\n")
-    os.replace(tmp, cache)                               # only complete files land in the cache
+    os.replace(tmp, cache)
     return works
 
 
 def fetch_sources(source_ids):
-    """Journal/venue details for the given OpenAlex source ids (cached)."""
     cache = os.path.join(RAW_DIR, "sources.json")
     known = {}
     if os.path.exists(cache):
@@ -130,7 +104,7 @@ def fetch_sources(source_ids):
         for s in data["results"]:
             known[short_id(s["id"])] = s
         for sid in batch:
-            known.setdefault(sid, None)                  # remember ids OpenAlex did not return
+            known.setdefault(sid, None)
         print(f"  sources: {min(i + 50, len(missing))}/{len(missing)}", file=sys.stderr)
         time.sleep(0.3)
         with open(cache, "w", encoding="utf-8") as f:
@@ -156,7 +130,6 @@ def clean_text(text):
 
 
 def rebuild_abstract(inverted):
-    """OpenAlex stores abstracts as {word: [positions]}; put the words back in order."""
     if not inverted:
         return None
     slots = {}
@@ -164,7 +137,6 @@ def rebuild_abstract(inverted):
         for p in positions:
             slots[p] = word
     text = clean_text(" ".join(slots[i] for i in sorted(slots)))
-    # Some publishers put the word "Abstract" in front of the text itself.
     return ABSTRACT_LABEL_RE.sub("", text) if text else None
 
 
@@ -173,7 +145,7 @@ def clean_work(w, category, sources, retrieved):
     abstract = rebuild_abstract(w.get("abstract_inverted_index"))
     doi = (w.get("doi") or "").lower().replace("https://doi.org/", "") or None
     if not title or not doi or not abstract or len(abstract.split()) < 30:
-        return None                                      # too little real metadata to be useful
+        return None
 
     loc = w.get("primary_location") or {}
     src = loc.get("source") or {}
@@ -183,7 +155,6 @@ def clean_work(w, category, sources, retrieved):
     if src_id:
         impact = None
         stats = (src_info or {}).get("summary_stats") or {}
-        # Repositories (arXiv etc.) are not journals: their citedness is not a journal metric.
         if src.get("type") != "repository" and stats.get("2yr_mean_citedness") is not None:
             impact = round(float(stats["2yr_mean_citedness"]), 3)
         journal = {
@@ -224,7 +195,7 @@ def clean_work(w, category, sources, retrieved):
         "category": category,
         "topic": topic.get("display_name"),
         "keywords": keywords,
-        "authors": authors[:50],                         # very large collaborations are capped
+        "authors": authors[:50],
         "journal": journal,
         "data_source": "OpenAlex",
         "retrieved": retrieved.isoformat(),

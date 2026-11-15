@@ -4,8 +4,6 @@
 #include <cmath>
 using namespace std;
 
-// How much a word counts depending on where it appears: a word in the title says more
-// about a paper than the same word somewhere in the abstract.
 static const float TITLE_WEIGHT = 3.0f;
 static const float KEYWORD_WEIGHT = 2.0f;
 static const float TOPIC_WEIGHT = 2.0f;
@@ -43,7 +41,6 @@ SearchEngine::SearchEngine(vector<Paper> papers) : papers_(std::move(papers))
     }
     index_.finalize();
 
-    // Authors who wrote at least two papers become autocomplete suggestions too.
     for (const auto& item : papersByAuthor_)
     {
         if (item.second.size() >= 2)
@@ -61,7 +58,6 @@ SearchEngine::SearchEngine(vector<Paper> papers) : papers_(std::move(papers))
     trie_.finalize();
 }
 
-// Puts one paper's words into the Inverted Index, plus the author/keyword maps.
 void SearchEngine::addToIndex(int position, const Paper& paper)
 {
     unordered_map<string, float> counts;
@@ -86,15 +82,12 @@ void SearchEngine::addToIndex(int position, const Paper& paper)
     index_.addDocument(position, counts);
 }
 
-// Titles, keyword phrases, topics and categories become autocomplete suggestions.
 void SearchEngine::addToTrie(const Paper& paper)
 {
-    // Highly cited papers are suggested first (log scale so one famous paper does not
-    // push everything else away).
     trie_.insert(paper.title, "paper", 1.0 + log10(1.0 + paper.citedBy), paper.id);
     for (const string& keyword : paper.keywords)
     {
-        trie_.insert(keyword, "keyword", 1.0);      // weight grows with every paper using it
+        trie_.insert(keyword, "keyword", 1.0);
     }
     trie_.insert(paper.topic, "topic", 1.0);
     trie_.insert(paper.category, "category", 1.0);
@@ -131,7 +124,7 @@ vector<Suggestion> SearchEngine::autocomplete(const string& prefix, size_t maxRe
 
 int SearchEngine::findIndex(int id) const
 {
-    auto found = positionById_.find(id);            // hash lookup: O(1) on average
+    auto found = positionById_.find(id);
     return found == positionById_.end() ? -1 : found->second;
 }
 

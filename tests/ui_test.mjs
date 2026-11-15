@@ -1,8 +1,3 @@
-// Browser test of the website, driving headless Chrome over the DevTools protocol.
-// No npm packages needed (Node 22+ has fetch and WebSocket built in).
-//
-//   chrome --headless=new --remote-debugging-port=9222 --user-data-dir=<temp dir> about:blank
-//   node tests/ui_test.mjs http://127.0.0.1:8080 ./screenshots
 import { writeFileSync, mkdirSync } from 'node:fs';
 
 const BASE = process.argv[2] || 'http://127.0.0.1:8080';
@@ -75,7 +70,6 @@ check('landing: categories + featured papers', true,
 check('landing: stats shown', await evaluate(`document.querySelector('.stats').textContent.includes('research papers')`));
 await shot('01-landing-desktop');
 
-// Trie autocomplete in the hero search box.
 await evaluate(`(() => { const i = document.querySelector('.hero input'); i.focus(); i.value = 'neural'; i.dispatchEvent(new Event('input')); })()`);
 await waitFor(`document.querySelector('.hero .suggestions:not([hidden]) li')`, 'autocomplete');
 const sugg = await evaluate(`[...document.querySelectorAll('.hero .suggestions li')].map(li => li.textContent)`);
@@ -84,12 +78,10 @@ await shot('02-autocomplete');
 await evaluate(`document.querySelector('.hero input').dispatchEvent(new KeyboardEvent('keydown', {key: 'ArrowDown'}))`);
 check('autocomplete keyboard highlight', await evaluate(`document.querySelector('.hero .suggestions li[aria-selected="true"]') !== null`));
 
-// Protected page while logged out -> login.
 await evaluate(`location.hash = '#/saved'`);
 await waitFor(`location.hash.startsWith('#/login')`, 'redirect to login');
 check('protected page redirects to login', true, await evaluate('location.hash'));
 
-// Register (client-side validation first).
 await evaluate(`document.querySelector('.auth-switch a').click()`);
 await waitFor(`location.hash.startsWith('#/register?next=')`, 'register link keeps next');
 await sleep(200);
@@ -104,7 +96,6 @@ await waitFor(`document.querySelector('.welcome h1')`, 'dashboard');
 check('dashboard greets user', await evaluate(`document.querySelector('.welcome h1').textContent === 'Welcome back, UI'`));
 await shot('03-dashboard-new-user');
 
-// Search with combined filters.
 await go('#/search?q=deep%20learning&year_from=2016&year_to=2020&min_impact=5&sort=impact_desc');
 await waitFor(`document.querySelector('.results-head .count').textContent.includes('found')`, 'results');
 const count = await evaluate(`document.querySelector('.results-head .count').textContent`);
@@ -116,13 +107,11 @@ check('years within 2016-2020', years.every(m => /201[6-9]|2020/.test(m)));
 check('active filter chips', (await evaluate(`document.querySelectorAll('.active-filters .chip').length`)) === 3);
 await shot('04-search-filters');
 
-// Save the first result.
 await evaluate(`document.querySelector('.paper-card .save-btn').click()`);
 await waitFor(`document.querySelector('.paper-card .save-btn.saved')`, 'saved state');
 check('bookmark toggles on', true);
 const savedTitle = await evaluate(`document.querySelector('.paper-card .paper-title').textContent`);
 
-// Pagination.
 const hasNext = await evaluate(`!!document.querySelector('.pager a[href*="page=2"]')`);
 if (hasNext) {
   await evaluate(`document.querySelector('.pager a[href*="page=2"]').click()`);
@@ -131,7 +120,6 @@ if (hasNext) {
   check('pagination to page 2', true);
 }
 
-// Paper page with similar papers.
 await evaluate(`document.querySelector('.paper-card .paper-title a').click()`);
 await waitFor(`document.querySelector('.paper-page h1') && document.querySelector('.section .stack .paper-card')`, 'paper page');
 check('paper page: abstract + details', await evaluate(`document.querySelector('.abstract').textContent.length > 100 && document.querySelector('.facts').textContent.includes('Journal')`));
@@ -140,12 +128,10 @@ check('similar papers with reasons', reasons.length > 0, reasons.join(' | '));
 await evaluate(`document.querySelector('.paper-page details, .section details')?.setAttribute('open', '')`);
 await shot('05-paper-page');
 
-// Saved page shows the bookmark.
 await go('#/saved');
 await waitFor(`document.querySelector('.paper-card') || document.querySelector('.empty')`, 'saved list');
 check('saved page lists bookmarked paper', await evaluate(`[...document.querySelectorAll('.paper-title')].some(t => t.textContent === ${JSON.stringify(savedTitle)})`));
 
-// Profile: add interest.
 await go('#/profile');
 await waitFor(`document.querySelector('main h1')?.textContent === 'Your profile'`, 'profile');
 await evaluate(`[...document.querySelectorAll('button.chip')].find(b => b.textContent.includes('Artificial Intelligence')).click()`);
@@ -154,14 +140,12 @@ await waitFor(`document.querySelector('.form-ok')`, 'interests saved');
 check('profile: interests saved', true);
 await shot('06-profile');
 
-// Recommendations.
 await go('#/recommendations');
 await waitFor(`document.querySelectorAll('.paper-card').length > 0`, 'recommendations');
 check('recommendations shown with basis', await evaluate(`document.querySelector('.page-header p').textContent.startsWith('Based on')`),
   await evaluate(`document.querySelector('.page-header p').textContent`));
 await shot('07-recommendations');
 
-// History.
 await go('#/history');
 await waitFor(`document.querySelector('.list-row') || document.querySelector('.empty')`, 'history');
 check('history lists the search', await evaluate(`[...document.querySelectorAll('.list-row .title')].some(t => t.textContent === 'deep learning')`));
@@ -169,12 +153,10 @@ await go('#/history?tab=viewed');
 await waitFor(`document.querySelector('.paper-card') || document.querySelector('.empty')`, 'viewed');
 check('history lists the viewed paper', (await evaluate(`document.querySelectorAll('.paper-card').length`)) >= 1);
 
-// Dashboard now has data.
 await go('#/dashboard');
 await waitFor(`document.querySelectorAll('.list-row').length > 0`, 'dashboard data');
 await shot('08-dashboard');
 
-// Mobile layout.
 await viewport(390, 844, true);
 await go('#/');
 await sleep(300);
@@ -193,7 +175,6 @@ await go('#/paper/1');
 await waitFor(`document.querySelector('.paper-page h1')`, 'mobile paper');
 check('mobile: no horizontal overflow (paper)', await evaluate(`document.documentElement.scrollWidth <= window.innerWidth + 1`));
 
-// Logout.
 await viewport(1280, 900);
 await go('#/profile');
 await waitFor(`document.querySelector('main h1')?.textContent === 'Your profile'`, 'profile again');

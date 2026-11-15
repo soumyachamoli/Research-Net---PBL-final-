@@ -38,7 +38,7 @@ vector<string> tokenize(const string& text)
         }
         else if (!current.empty())
         {
-            words.push_back(current);       // any other character ends the word
+            words.push_back(current);
             current.clear();
         }
     }
@@ -63,7 +63,7 @@ bool isStopWord(const string& word)
 
     if (word.size() < 2)
     {
-        return true;                        // single characters are not useful search words
+        return true;
     }
     return stopWords.count(word) > 0;
 }
@@ -80,27 +80,25 @@ string stem(const string& word)
     {
         return word;
     }
-    // Plurals.
     if (endsWith(word, "ies") && word.size() > 4)
     {
-        return word.substr(0, word.size() - 3) + "y";          // studies -> study
+        return word.substr(0, word.size() - 3) + "y";
     }
     if (endsWith(word, "sses"))
     {
-        return word.substr(0, word.size() - 2);                // classes -> class
+        return word.substr(0, word.size() - 2);
     }
     if (endsWith(word, "s") && !endsWith(word, "ss") && !endsWith(word, "us") && !endsWith(word, "is"))
     {
-        return word.substr(0, word.size() - 1);                // networks -> network
+        return word.substr(0, word.size() - 1);
     }
-    // -ing / -ed, only when a reasonable stem (4+ letters) is left.
     if (endsWith(word, "ing") && word.size() >= 7)
     {
-        return word.substr(0, word.size() - 3);                // learning -> learn
+        return word.substr(0, word.size() - 3);
     }
     if (endsWith(word, "ed") && word.size() >= 6)
     {
-        return word.substr(0, word.size() - 2);                // trained -> train
+        return word.substr(0, word.size() - 2);
     }
     return word;
 }

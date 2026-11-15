@@ -1,5 +1,3 @@
-// test_recommender.cpp
-// Build and run all unit tests:  ./build.sh test
 #include "check.h"
 #include "Recommender.h"
 #include "SearchEngine.h"
@@ -33,7 +31,6 @@ static Paper makePaper(int id, const string& title, const string& abstractText, 
 
 static vector<Paper> samplePapers()
 {
-    // Small hand-written fixtures for the tests only (the real data comes from OpenAlex).
     return {
         makePaper(1, "Convolutional neural networks for image classification",
                   "We train deep convolutional neural networks on large image datasets.", 2015, {1, 2},
@@ -63,7 +60,7 @@ static void testRecommender()
     CHECK(!similar.empty() && similar.size() <= 3);
     for (const auto& r : similar)
     {
-        CHECK(r.paperId != 1);                                    // never the paper itself
+        CHECK(r.paperId != 1);
         CHECK(r.score >= 0 && r.score <= 1);
         CHECK(!r.reasons.empty());
     }
@@ -73,10 +70,10 @@ static void testRecommender()
     {
         bestContent = max(bestContent, r.content);
     }
-    CHECK(fabs(bestContent - 1.0) < 1e-9);                        // best match of the request -> 1                               // shares author 2 + keyword + text
+    CHECK(fabs(bestContent - 1.0) < 1e-9);
     for (size_t i = 1; i < similar.size(); i++)
     {
-        CHECK(similar[i - 1].score >= similar[i].score);          // sorted best first
+        CHECK(similar[i - 1].score >= similar[i].score);
     }
     bool sameAuthorReason = false;
     for (const string& reason : similar[0].reasons)
@@ -85,7 +82,6 @@ static void testRecommender()
     }
     CHECK(sameAuthorReason);
 
-    // Unknown impact factor is left out, not counted as zero.
     for (const auto& r : recommender.similarTo(2, 5))
     {
         if (r.paperId == 4 || r.paperId == 5)
@@ -98,10 +94,10 @@ static void testRecommender()
     UserProfile profile;
     profile.savedPaperIds = {4};
     auto forUser = recommender.forUser(profile, 5);
-    CHECK(!forUser.empty() && forUser[0].paperId == 5);           // the other networking paper
+    CHECK(!forUser.empty() && forUser[0].paperId == 5);
     for (const auto& r : forUser)
     {
-        CHECK(r.paperId != 4);                                    // saved papers are skipped
+        CHECK(r.paperId != 4);
     }
 
     UserProfile empty;

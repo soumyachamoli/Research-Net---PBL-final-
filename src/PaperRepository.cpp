@@ -3,8 +3,6 @@
 using namespace std;
 using json = nlohmann::json;
 
-// Columns of a paper card. {USER} is replaced with the parameter holding the user id
-// (0 when nobody is logged in, so "bookmarked" is simply false).
 static const string SUMMARY_COLUMNS = R"(
     p.id, p.title, left(p.abstract, 320) AS preview, p.publication_year, p.publication_date,
     p.publication_type, p.doi, p.url, p.cited_by_count, p.category, p.topic,
@@ -88,7 +86,6 @@ bool isValidSort(const string& sort)
            sort == "impact_asc" || sort == "citations" || sort == "author";
 }
 
-// "50%_off" -> "50\%\_off": the user's text is matched literally inside ILIKE '%...%'.
 static string escapeLike(const string& text)
 {
     string escaped;
@@ -167,7 +164,6 @@ json PaperRepository::search(const vector<SearchHit>* hits, const PaperFilter& f
         return "$" + to_string(params.size());
     };
 
-    // Step 1: where the candidate papers come from.
     string from;
     if (hits != nullptr)
     {
@@ -187,12 +183,9 @@ json PaperRepository::search(const vector<SearchHit>* hits, const PaperFilter& f
     }
     from += " LEFT JOIN journals j ON j.id = p.journal_id";
 
-    // Step 2: every filter the user set becomes one condition (all combined with AND).
     string where = " WHERE true";
     if (!filter.author.empty())
     {
-        // Matches the start of any word of the name: "he" finds "Kaiming He" and "Hector
-        // Garcia", but not "Schwarz". Both patterns can use the trigram index.
         string name = add(escapeLike(filter.author));
         where += " AND EXISTS (SELECT 1 FROM paper_authors pa JOIN authors a ON a.id = pa.author_id"
                  " WHERE pa.paper_id = p.id AND (a.name ILIKE " + name + " || '%' OR a.name ILIKE '% ' || " +
@@ -227,8 +220,6 @@ json PaperRepository::search(const vector<SearchHit>* hits, const PaperFilter& f
     {
         where += " AND p.publication_year <= " + add(toParam(filter.yearTo));
     }
-    // Papers without a known impact factor are excluded by an impact filter (NULL fails
-    // the comparison) - they are not treated as having impact 0.
     if (filter.minImpact)
     {
         where += " AND j.impact_factor >= " + add(toParam(*filter.minImpact));
@@ -238,7 +229,6 @@ json PaperRepository::search(const vector<SearchHit>* hits, const PaperFilter& f
         where += " AND j.impact_factor <= " + add(toParam(*filter.maxImpact));
     }
 
-    // Step 3: sorting. Every order ends with p.id so pages never overlap.
     string order;
     if (filter.sort == "newest")
         order = "p.publication_date DESC NULLS LAST, p.publication_year DESC NULLS LAST, p.id";
@@ -254,12 +244,10 @@ json PaperRepository::search(const vector<SearchHit>* hits, const PaperFilter& f
         order = "(SELECT a.name FROM paper_authors pa JOIN authors a ON a.id = pa.author_id"
                 " WHERE pa.paper_id = p.id ORDER BY pa.position LIMIT 1) ASC NULLS LAST, p.id";
     else if (hits != nullptr)
-        order = "r.score DESC, p.cited_by_count DESC, p.id";          // relevance
+        order = "r.score DESC, p.cited_by_count DESC, p.id";
     else
-        order = "p.cited_by_count DESC, p.id";                         // no query: most cited first
+        order = "p.cited_by_count DESC, p.id";
 
-    // Step 4: one page of ids (the total comes from a window function in the same query),
-    // then the card details for just those rows.
     int offset = (filter.page - 1) * filter.pageSize;
     string inner = "SELECT p.id, r.score, count(*) OVER () AS total, row_number() OVER (ORDER BY " + order +
                    ") AS ord " + from + where + " ORDER BY " + order + " LIMIT " + add(toParam(filter.pageSize)) +
@@ -352,7 +340,7 @@ json PaperRepository::summaries(const vector<int>& ids, int userId)
     {
         byId[r.integer(i, "id")] = paperSummaryJson(r, i);
     }
-    for (int id : ids)                                  // keep the caller's order
+    for (int id : ids)
     {
         auto found = byId.find(id);
         if (found != byId.end())
@@ -400,7 +388,6 @@ json PaperRepository::filterOptions()
 
 json PaperRepository::featured(const string& category, int limit, int userId)
 {
-    // Most cited papers of the last five years in the collection (optionally one category).
     Result r = db_.query("SELECT " + withUser(SUMMARY_COLUMNS, "$3") + R"(
           FROM papers p LEFT JOIN journals j ON j.id = p.journal_id
          WHERE p.publication_year >= (SELECT max(publication_year) - 4 FROM papers)

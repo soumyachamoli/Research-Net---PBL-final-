@@ -32,8 +32,6 @@ Config loadConfig()
     config.databaseUrl = env("DATABASE_URL");
     if (config.databaseUrl.empty())
     {
-        // Local use: config.txt holds one libpq connection line. It is in .gitignore,
-        // so the password never goes to GitHub.
         ifstream file("config.txt");
         getline(file, config.databaseUrl);
     }

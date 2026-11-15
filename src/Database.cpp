@@ -4,9 +4,8 @@
 #include <sstream>
 using namespace std;
 
-// ------------------------------------------------------------ Result
 
-Result::Result(PGresult* result) : result_(result, PQclear)   // PQclear frees libpq's memory
+Result::Result(PGresult* result) : result_(result, PQclear)
 {
 }
 
@@ -32,7 +31,7 @@ bool Result::isNull(int row, const string& name) const
 
 string Result::text(int row, const string& name) const
 {
-    return PQgetvalue(result_.get(), row, column(name));      // libpq gives every value as text
+    return PQgetvalue(result_.get(), row, column(name));
 }
 
 int Result::integer(int row, const string& name) const
@@ -54,7 +53,6 @@ bool Result::boolean(int row, const string& name) const
     return text(row, name) == "t";
 }
 
-// ------------------------------------------------------------ Database
 
 Database::Database(const string& connectionInfo, int poolSize) : connectionInfo_(connectionInfo)
 {
@@ -84,8 +82,6 @@ Database::~Database()
     }
 }
 
-// Waits until a connection is free. A connection that was dropped (e.g. the database
-// restarted) is reconnected before it is handed out.
 PGconn* Database::acquire()
 {
     unique_lock<mutex> lock(mutex_);
@@ -121,7 +117,6 @@ Result Database::query(const string& sql, const Params& params)
     PGconn* conn = acquire();
     PGresult* raw = PQexecParams(conn, sql.c_str(), (int)values.size(), nullptr,
                                  values.empty() ? nullptr : values.data(), nullptr, nullptr, 0);
-    // A broken connection fails the query once; reconnect and try one more time.
     if (PQstatus(conn) != CONNECTION_OK)
     {
         PQclear(raw);
@@ -146,7 +141,6 @@ Result Database::query(const string& sql, const Params& params)
     return result;
 }
 
-// ------------------------------------------------------------ parameters
 
 Param toParam(int value)
 {

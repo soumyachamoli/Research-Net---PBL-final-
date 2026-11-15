@@ -6,7 +6,6 @@ using json = nlohmann::json;
 void sendJson(httplib::Response& res, int status, const json& body)
 {
     res.status = status;
-    // error_handler::replace keeps invalid UTF-8 in the data from crashing the response.
     res.set_content(body.dump(-1, ' ', false, json::error_handler_t::replace), "application/json; charset=utf-8");
 }
 
@@ -86,7 +85,7 @@ optional<double> numberParam(const httplib::Request& req, const char* name, doub
 
 json jsonBody(const httplib::Request& req)
 {
-    json body = json::parse(req.body, nullptr, false);          // false: no exception, returns "discarded"
+    json body = json::parse(req.body, nullptr, false);
     if (body.is_discarded() || !body.is_object())
     {
         throw BadRequest("Request body must be a JSON object");

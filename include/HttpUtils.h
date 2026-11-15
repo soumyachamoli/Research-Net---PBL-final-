@@ -7,7 +7,6 @@
 #include <stdexcept>
 #include <string>
 
-// Thrown for invalid user input; the server turns it into "400 Bad Request".
 class BadRequest : public std::runtime_error
 {
 public:
@@ -17,12 +16,10 @@ public:
 void sendJson(httplib::Response& res, int status, const nlohmann::json& body);
 void sendError(httplib::Response& res, int status, const std::string& message);
 
-// Query-string parameters (?page=2&q=...). Each throws BadRequest when the value is not valid.
 std::string textParam(const httplib::Request& req, const char* name, size_t maxLength = 200);
 int intParam(const httplib::Request& req, const char* name, int fallback, int min, int max);
 std::optional<double> numberParam(const httplib::Request& req, const char* name, double min, double max);
 
-// The JSON body of a POST/PUT request (an object), or BadRequest.
 nlohmann::json jsonBody(const httplib::Request& req);
 std::string jsonText(const nlohmann::json& body, const char* field, size_t maxLength);
 

@@ -1,5 +1,3 @@
-// test_trie.cpp
-// Build and run all unit tests:  ./build.sh test
 #include "check.h"
 #include "TextUtils.h"
 #include "Trie.h"
@@ -31,24 +29,24 @@ static void testTrie()
     cout << "Trie" << endl;
     Trie trie;
     trie.insert("Machine Learning", "keyword", 5);
-    trie.insert("machine learning", "keyword", 5);      // duplicate (different case)
+    trie.insert("machine learning", "keyword", 5);
     trie.insert("Machine Translation", "keyword", 2);
     trie.insert("Machine Vision", "keyword", 8);
     trie.insert("Deep Learning", "keyword", 1);
     trie.insert("Attention Is All You Need", "paper", 3, 42);
     trie.finalize();
 
-    CHECK(trie.size() == 5);                           // duplicate was merged
+    CHECK(trie.size() == 5);
     CHECK(trie.contains("MACHINE LEARNING"));
-    CHECK(!trie.contains("machine"));                  // a prefix is not a stored phrase
+    CHECK(!trie.contains("machine"));
 
     vector<Suggestion> s = trie.autocomplete("mach", 10);
     CHECK(s.size() == 3);
-    CHECK(s[0].text == "Machine Learning" && s[0].weight == 10);   // 5 + 5
+    CHECK(s[0].text == "Machine Learning" && s[0].weight == 10);
     CHECK(s[1].text == "Machine Vision");
     CHECK(s[2].text == "Machine Translation");
 
-    CHECK(trie.autocomplete("mach", 1).size() == 1);   // maxResults respected
+    CHECK(trie.autocomplete("mach", 1).size() == 1);
     CHECK(trie.autocomplete("MaChInE l", 10).size() == 1);
     CHECK(trie.autocomplete("xyz", 10).empty());
     CHECK(trie.autocomplete("", 10).empty());

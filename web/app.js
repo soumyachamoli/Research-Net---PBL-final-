@@ -1,7 +1,3 @@
-// ResearchNet website: a small single-page app on top of the C++ REST API.
-// Pages are chosen by the URL hash (#/search?q=...), so links can be shared and the
-// browser's back button works. All data is inserted as text (never as HTML), so paper
-// titles or user input can never inject script into the page.
 'use strict';
 
 (() => {
@@ -11,9 +7,7 @@
   const state = { user: null, stats: null, filterOptions: null };
   let renderToken = 0;
 
-  // ------------------------------------------------------------ DOM helpers
 
-  // h('a', {href: '#/', class: 'x', onclick: fn}, 'text', child, [more children])
   function h(tag, attrs, ...children) {
     const el = document.createElement(tag);
     for (const [key, value] of Object.entries(attrs || {})) {
@@ -29,7 +23,7 @@
   }
 
   function append(el, children) {
-    for (const child of [children].flat(Infinity)) {      // one child or a (nested) list
+    for (const child of [children].flat(Infinity)) {
       if (child == null || child === false) continue;
       el.append(child instanceof Node ? child : String(child));
     }
@@ -41,7 +35,6 @@
     return el;
   }
 
-  // Simple line icons, drawn as SVG paths.
   const ICONS = {
     search: ['M21 21l-4.3-4.3', 'M11 18a7 7 0 1 1 0-14 7 7 0 0 1 0 14z'],
     bookmark: ['M6 3h12v18l-6-4.2L6 21z'],
@@ -76,7 +69,6 @@
     return svg;
   }
 
-  // Only http(s) links from the data are turned into links.
   function safeUrl(url) {
     return typeof url === 'string' && /^https?:\/\//i.test(url) ? url : null;
   }
@@ -85,7 +77,6 @@
     return Number(n).toLocaleString('en-US');
   }
 
-  // PostgreSQL timestamps: "2026-11-15 21:17:00.040701+05:30"
   function fmtDate(text) {
     if (!text) return '';
     const iso = text.replace(' ', 'T').replace(/(\.\d{3})\d+/, '$1');
@@ -102,7 +93,6 @@
     toast.timer = setTimeout(() => { el.hidden = true; }, 2600);
   }
 
-  // ------------------------------------------------------------ API
 
   async function api(path, options = {}) {
     const init = { method: options.method || 'GET', credentials: 'same-origin', headers: {} };
@@ -119,7 +109,7 @@
     let data = null;
     try { data = await response.json(); } catch (err) { data = {}; }
     if (response.status === 401 && state.user && path !== '/api/login') {
-      state.user = null;                      // session expired
+      state.user = null;
       renderNav();
     }
     return { ok: response.ok, status: response.status, data };
@@ -129,7 +119,6 @@
     return (result.data && result.data.error) || 'Something went wrong. Please try again.';
   }
 
-  // ------------------------------------------------------------ routing
 
   function parseHash() {
     const raw = location.hash.replace(/^#/, '') || '/';
@@ -184,10 +173,9 @@
       return;
     }
     const match = path.match(route.pattern);
-    route.page(match, query, () => token === renderToken);   // isCurrent(): ignore late answers
+    route.page(match, query, () => token === renderToken);
   }
 
-  // ------------------------------------------------------------ navigation bar
 
   function renderNav(path = parseHash().path) {
     clear(nav);
@@ -217,7 +205,6 @@
     e.currentTarget.setAttribute('aria-expanded', String(open));
   });
 
-  // ------------------------------------------------------------ search box with Trie autocomplete
 
   let searchBoxCount = 0;
 
@@ -261,7 +248,6 @@
       if (!items.length) { close(); return; }
       const typed = input.value.trim().toLowerCase();
       items.forEach((s, i) => {
-        // Bold the part the user already typed (the Trie matched it as a prefix).
         const starts = s.text.toLowerCase().startsWith(typed);
         const text = h('span', { class: 's-text' },
           starts ? [h('mark', null, s.text.slice(0, typed.length)), s.text.slice(typed.length)] : s.text);
@@ -282,7 +268,7 @@
       timer = setTimeout(async () => {
         const id = ++requestId;
         const result = await api('/api/autocomplete?' + new URLSearchParams({ prefix, limit: 8 }));
-        if (id === requestId && result.ok) show(result.data);      // only the newest answer counts
+        if (id === requestId && result.ok) show(result.data);
       }, 120);
     });
 
@@ -301,7 +287,6 @@
         e.preventDefault();
         close();
         const current = parseHash();
-        // Keep the filters when searching again from the search page.
         const params = current.path === '/search' ? Object.fromEntries(current.query) : {};
         params.q = input.value.trim();
         delete params.page;
@@ -312,7 +297,6 @@
     return h('div', { class: 'searchbox' + (large ? ' large' : '') }, form, list);
   }
 
-  // ------------------------------------------------------------ paper cards
 
   function impactBadge(paper) {
     if (paper.impactFactor == null) {
@@ -412,7 +396,6 @@
     return h('div', { class: 'loading', role: 'status' }, text);
   }
 
-  // ------------------------------------------------------------ landing page
 
   async function landingPage(match, query, isCurrent) {
     const statsLine = h('div', { class: 'stats' });
@@ -468,7 +451,6 @@
     return h('div', { class: 'feature' }, h('div', { class: 'icon' }, icon(iconName)), h('h3', null, title), h('p', null, text));
   }
 
-  // ------------------------------------------------------------ login / register
 
   function authPage(mode, query) {
     if (state.user) { go('/dashboard'); return; }
@@ -521,7 +503,6 @@
     form.querySelector('input').focus();
   }
 
-  // ------------------------------------------------------------ dashboard
 
   async function dashboardPage(match, query, isCurrent) {
     const firstName = state.user.name.split(/\s+/)[0];
@@ -585,7 +566,6 @@
         h('span', { class: 'hint' }, [paper.journal, paper.year, note].filter(Boolean).join(' · '))));
   }
 
-  // ------------------------------------------------------------ search page
 
   const SORTS = [
     ['relevance', 'Relevance'], ['newest', 'Newest first'], ['oldest', 'Oldest first'],
@@ -607,7 +587,6 @@
     }
     const opts = state.filterOptions;
 
-    // ---- filter panel
     const input = (name, label, attrs = {}) => h('div', { class: 'field' },
       h('label', { for: 'flt-' + name }, label),
       h('input', Object.assign({ id: 'flt-' + name, name, class: 'input', value: params[name] || '' }, attrs)));
@@ -699,7 +678,6 @@
     }
   }
 
-  // ------------------------------------------------------------ paper page
 
   async function paperPage(match, query, isCurrent) {
     const id = match[1];
@@ -756,7 +734,6 @@
     main.append(similarSection);
   }
 
-  // ------------------------------------------------------------ recommendations
 
   async function recommendationsPage(match, query, isCurrent) {
     const list = h('div', { class: 'stack' }, loading('Finding papers for you…'));
@@ -786,7 +763,6 @@
     result.data.results.forEach(rec => list.append(recommendationCard(rec)));
   }
 
-  // ------------------------------------------------------------ saved papers
 
   async function savedPage(match, query, isCurrent) {
     const list = h('div', { class: 'stack' }, loading());
@@ -806,7 +782,6 @@
     }
   }
 
-  // ------------------------------------------------------------ history
 
   async function historyPage(match, query, isCurrent) {
     const tab = query.get('tab') === 'viewed' ? 'viewed' : 'searches';
@@ -872,7 +847,6 @@
     }
   }
 
-  // ------------------------------------------------------------ profile
 
   async function profilePage(match, query, isCurrent) {
     main.append(loading());
@@ -883,7 +857,6 @@
     const profile = result.data;
     let interests = [...profile.interests];
 
-    // ---- account
     const nameMsg = h('div', { role: 'status' });
     const nameInput = h('input', { id: 'p-name', class: 'input', value: profile.user.name, maxlength: 100, required: true });
     const nameForm = h('form', null, nameMsg,
@@ -897,7 +870,6 @@
       if (r.ok) { state.user = r.data.user; renderNav(); }
     });
 
-    // ---- interests
     const chips = h('div', { class: 'chips' });
     const interestMsg = h('div', { role: 'status' });
     const interestInput = h('input', { class: 'input', placeholder: 'e.g. graph neural networks', maxlength: 60, 'aria-label': 'New interest' });
@@ -927,7 +899,6 @@
       if (r.ok) { interests = r.data.interests; drawInterests(); }
     });
 
-    // ---- password
     const pwMsg = h('div', { role: 'status' });
     const pwForm = h('form', null, pwMsg,
       h('div', { class: 'field' }, h('label', { for: 'p-cur' }, 'Current password'), h('input', { id: 'p-cur', name: 'currentPassword', type: 'password', class: 'input', autocomplete: 'current-password', required: true })),
@@ -966,7 +937,6 @@
     ]);
   }
 
-  // ------------------------------------------------------------ start
 
   async function start() {
     const me = await api('/api/me');

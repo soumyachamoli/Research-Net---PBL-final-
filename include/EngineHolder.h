@@ -6,9 +6,6 @@
 #include <mutex>
 #include <string>
 
-// Shares the current SearchEngine between web requests. When the papers in PostgreSQL
-// change, a new engine is built in the background and swapped in with set(); requests
-// that are still using the old one keep it alive through their shared_ptr.
 class EngineHolder
 {
 public:

@@ -5,18 +5,16 @@
 #include <string>
 #include <vector>
 
-// The part of a paper the search engine keeps in memory. The full record (DOI, URL,
-// complete abstract for display, ...) is always read from PostgreSQL when it is shown.
 struct Paper
 {
-    int id = 0;                          // papers.id in PostgreSQL
+    int id = 0;
     std::string title;
     std::string abstractText;
-    int year = 0;                        // 0 = unknown
-    std::string category;                // research area, e.g. "Artificial Intelligence"
+    int year = 0;
+    std::string category;
     std::string topic;
     std::string journal;
-    std::optional<double> impactFactor;  // empty = not known (never treated as zero)
+    std::optional<double> impactFactor;
     int citedBy = 0;
     std::vector<int> authorIds;
     std::vector<std::string> authors;

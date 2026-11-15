@@ -1,11 +1,9 @@
-// Routes for finding and reading papers: search + filters, autocomplete, paper details.
 #include "HttpUtils.h"
 #include "TextUtils.h"
 #include "WebServer.h"
 using namespace std;
 using json = nlohmann::json;
 
-// Reads ?author=&journal=&category=&keyword=&type=&year=&year_from=&year_to=&min_impact=&max_impact=&sort=&page=&page_size=
 static PaperFilter readFilter(const httplib::Request& req)
 {
     PaperFilter filter;
@@ -60,8 +58,6 @@ void WebServer::registerPaperRoutes()
         });
     });
 
-    // Search. The text query goes through the C++ inverted index (ranked by TF-IDF);
-    // filters, sorting and pages are applied by PostgreSQL. Without q, all papers are filtered.
     auto search = [this](const httplib::Request& req, httplib::Response& res) {
         string query = textParam(req, "q", 300);
         PaperFilter filter = readFilter(req);
@@ -74,7 +70,6 @@ void WebServer::registerPaperRoutes()
         if (hasQuery)
         {
             hits = engine->search(query);
-            // Nothing contains ALL the words: show papers with ANY of them instead (and say so).
             vector<string> words = tokenize(query);
             if (hits.empty() && words.size() > 1)
             {
@@ -97,7 +92,6 @@ void WebServer::registerPaperRoutes()
     server_.Get("/api/search", search);
     server_.Get("/api/papers", search);
 
-    // Trie autocomplete: titles, keywords, topics, categories and authors.
     server_.Get("/api/autocomplete", [this](const httplib::Request& req, httplib::Response& res) {
         string prefix = textParam(req, "prefix", 100);
         int limit = intParam(req, "limit", 8, 1, 10);

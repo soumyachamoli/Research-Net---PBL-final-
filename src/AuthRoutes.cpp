@@ -1,4 +1,3 @@
-// Routes for accounts: register, login, logout and the current user.
 #include "HttpUtils.h"
 #include "WebServer.h"
 #include <regex>
@@ -12,7 +11,6 @@ static json userJson(const User& user)
     return {{"id", user.id}, {"name", user.name}, {"email", user.email}};
 }
 
-// Lower case (ASCII), no surrounding spaces: "  Ana@Example.COM " -> "ana@example.com".
 static string normalizeEmail(const string& email)
 {
     string result = trim(email);
@@ -32,7 +30,6 @@ static bool isValidEmail(const string& email)
     return email.size() <= 254 && regex_match(email, pattern);
 }
 
-// bcrypt only uses the first 72 bytes of a password, so longer ones are refused.
 static void checkPassword(const string& password)
 {
     if (password.size() < 8)
@@ -61,7 +58,6 @@ static string checkName(const string& rawName)
 
 void WebServer::registerAuthRoutes()
 {
-    // POST /api/register  {"name", "email", "password", "confirmPassword" (optional)}
     post("/api/register", [this](const httplib::Request& req, httplib::Response& res) {
         json body = jsonBody(req);
         string name = checkName(jsonText(body, "name", 200));
@@ -87,7 +83,6 @@ void WebServer::registerAuthRoutes()
         sendJson(res, 201, {{"user", userJson(*user)}});
     });
 
-    // POST /api/login  {"email", "password"}
     post("/api/login", [this](const httplib::Request& req, httplib::Response& res) {
         string client = clientAddress(req);
         if (loginLimiter_.blocked(client))
@@ -107,7 +102,7 @@ void WebServer::registerAuthRoutes()
         if (!user)
         {
             loginLimiter_.recordFailure(client);
-            sendError(res, 401, "Wrong email or password");      // same message for both cases
+            sendError(res, 401, "Wrong email or password");
             return;
         }
         loginLimiter_.reset(client);
@@ -122,7 +117,7 @@ void WebServer::registerAuthRoutes()
         {
             users_.deleteSession(cookies.substr(at + 11, 64));
         }
-        setSessionCookie(res, "", 0);                            // Max-Age=0 deletes the cookie
+        setSessionCookie(res, "", 0);
         sendJson(res, 200, {{"ok", true}});
     });
 

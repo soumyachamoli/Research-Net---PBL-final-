@@ -1,7 +1,3 @@
-// ResearchNet: research paper search and recommendation.
-//
-//   researchnet            start the website and REST API
-//   researchnet --check    load the papers, build the data structures, print statistics, exit
 #include "Config.h"
 #include "Database.h"
 #include "EngineHolder.h"
@@ -13,7 +9,6 @@
 #include <thread>
 using namespace std;
 
-// Reads every paper from PostgreSQL and builds the Trie + Inverted Index.
 static shared_ptr<const SearchEngine> buildEngine(PaperRepository& papers)
 {
     auto started = chrono::steady_clock::now();
@@ -24,8 +19,6 @@ static shared_ptr<const SearchEngine> buildEngine(PaperRepository& papers)
     return engine;
 }
 
-// Keeps the in-memory index in sync with PostgreSQL: when papers are added, changed or
-// removed (e.g. by tools/load_papers.py), the engine is rebuilt and swapped in.
 static void watchForChanges(Database& db, EngineHolder& engines, int seconds)
 {
     PaperRepository papers(db);

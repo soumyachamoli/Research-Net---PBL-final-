@@ -14,7 +14,6 @@ void InvertedIndex::addDocument(int doc, const unordered_map<string, float>& ter
     SparseVector vector;
     for (const auto& item : termCounts)
     {
-        // New word: give it the next term id and an empty posting list.
         auto found = termIds_.find(item.first);
         int id;
         if (found == termIds_.end())
@@ -28,7 +27,7 @@ void InvertedIndex::addDocument(int doc, const unordered_map<string, float>& ter
         {
             id = found->second;
         }
-        postings_[id].push_back({doc, item.second});   // raw count for now, weight in finalize()
+        postings_[id].push_back({doc, item.second});
         vector.push_back({id, item.second});
     }
     documents_.push_back(vector);
@@ -41,10 +40,9 @@ void InvertedIndex::finalize()
     for (size_t id = 0; id < terms_.size(); id++)
     {
         double df = (double)postings_[id].size();
-        idf_[id] = log((n + 1.0) / (df + 1.0)) + 1.0;   // rare words count more
+        idf_[id] = log((n + 1.0) / (df + 1.0)) + 1.0;
     }
 
-    // tf-idf weights, then divide each document vector by its length.
     for (SparseVector& vector : documents_)
     {
         double length = 0;
@@ -59,10 +57,9 @@ void InvertedIndex::finalize()
         {
             entry.second = (float)(entry.second / length);
         }
-        sort(vector.begin(), vector.end());            // sorted by term id: needed by dot()
+        sort(vector.begin(), vector.end());
     }
 
-    // Rebuild the posting lists with the final weights (still in document order).
     for (auto& list : postings_)
     {
         list.clear();
@@ -118,16 +115,14 @@ vector<pair<int, double>> InvertedIndex::search(const vector<string>& terms, boo
         {
             if (termId(term) == -1)
             {
-                return results;                        // AND with an unknown word: nothing matches
+                return results;
             }
         }
     }
 
-    // Walk the posting list of every query term and add up query weight x document weight
-    // per document. Only documents that contain at least one term are ever touched.
     SparseVector query = queryVector(terms);
     unordered_map<int, double> scores;
-    unordered_map<int, int> matched;                   // how many query terms each doc contains
+    unordered_map<int, int> matched;
     for (const auto& entry : query)
     {
         for (const Posting& posting : postings_[entry.first])
@@ -195,7 +190,6 @@ size_t InvertedIndex::documentCount() const
     return documents_.size();
 }
 
-// Merge-style dot product of two vectors sorted by term id.
 double dot(const SparseVector& a, const SparseVector& b)
 {
     double sum = 0;

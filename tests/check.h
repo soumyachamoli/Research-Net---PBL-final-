@@ -1,4 +1,3 @@
-// Tiny test helper shared by the unit tests: CHECK(condition) counts and reports failures.
 #ifndef CHECK_H
 #define CHECK_H
 

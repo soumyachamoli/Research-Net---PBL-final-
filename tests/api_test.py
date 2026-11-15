@@ -1,12 +1,3 @@
-"""
-End-to-end tests of the running ResearchNet API.
-
-    python tests/api_test.py http://localhost:8080 [postgresql://... for cross-checks]
-
-With a database URL (or $DATABASE_URL) the filter results are cross-checked against
-independent SQL queries, and password storage is checked directly in the users table.
-Uses only the Python standard library (+ psycopg for the optional SQL checks).
-"""
 import http.cookiejar
 import json
 import os
@@ -24,7 +15,6 @@ results = []
 
 
 class Client:
-    """A browser-like client with its own cookie jar (= its own login session)."""
 
     def __init__(self):
         self.opener = urllib.request.build_opener(urllib.request.HTTPCookieProcessor(http.cookiejar.CookieJar()))
@@ -63,7 +53,6 @@ def search(client, **params):
 
 
 def all_results(client, **params):
-    """Every result of a search, following the pages."""
     items, page = [], 1
     while True:
         data = search(client, page=page, page_size=50, **params)
@@ -76,13 +65,11 @@ def all_results(client, **params):
 def main():
     anon = Client()
 
-    # ------------------------------------------------------------ basics
     status, health = anon.get("/api/health")
     check("health endpoint", status == 200 and health["status"] == "ok" and health["papers"] > 0)
     status, stats = anon.get("/api/stats")
     check("stats: papers and index sizes", status == 200 and stats["indexedTerms"] > 1000 and stats["trieNodes"] > 1000)
 
-    # ------------------------------------------------------------ search semantics
     both = search(anon, q="graph neural network")
     either = search(anon, q="graph or neural or network")
     check("AND search returns fewer results than OR", 0 < both["total"] < either["total"],
@@ -98,7 +85,6 @@ def main():
     check("search by author name", any("Kaiming He" in ", ".join(r["authors"]) for r in search(anon, q="kaiming he")["results"]))
     check("search by journal name", search(anon, q="IEEE Access")["total"] > 0)
 
-    # ------------------------------------------------------------ filters (each, then combined)
     items, total = all_results(anon, year_from=2019, year_to=2020)
     check("year range filter", total > 0 and all(2019 <= r["year"] <= 2020 for r in items), f"{total} papers")
     items, _ = all_results(anon, year=2015, q="network")
@@ -125,7 +111,6 @@ def main():
           combined["total"] > 0 and all(2017 <= r["year"] <= 2022 and 3 <= r["impactFactor"] <= 60 and
                                         r["category"] == "Artificial Intelligence" for r in rs), f"{combined['total']} papers")
 
-    # ------------------------------------------------------------ sorting + pagination
     def sorted_by(sort, key, reverse):
         items = search(anon, q="security", sort=sort, page_size=50)["results"]
         values = [key(r) for r in items]
@@ -143,7 +128,6 @@ def main():
     check("pagination: pages do not overlap", not {r["id"] for r in p1["results"]} & {r["id"] for r in p2["results"]}
           and p1["total"] == p2["total"])
 
-    # ------------------------------------------------------------ input validation
     for params, name in [({"sort": "bogus"}, "unknown sort"), ({"year_from": 2020, "year_to": 2010}, "reversed year range"),
                          ({"page": "x"}, "non-numeric page"), ({"page_size": 500}, "page size too large"),
                          ({"min_impact": 9, "max_impact": 2}, "reversed impact range")]:
@@ -156,19 +140,17 @@ def main():
     status, _ = anon.get("/api/does-not-exist")
     check("unknown API route -> JSON 404", status == 404)
 
-    # ------------------------------------------------------------ autocomplete
     status, sugg = anon.get("/api/autocomplete", prefix="Reinforc", limit=8)
     check("autocomplete: case-insensitive prefix matches",
           status == 200 and sugg and all(s["text"].lower().startswith("reinforc") for s in sugg), str(sugg[:2]))
     texts = [s["text"].lower() for s in sugg]
     check("autocomplete: no duplicates", len(texts) == len(set(texts)))
-    title = top["title"]                                 # a title that exists in this database
+    title = top["title"]
     status, sugg = anon.get("/api/autocomplete", prefix=title[:30], limit=10)
     check("autocomplete: paper titles open the paper",
           any(s["kind"] == "paper" and s.get("paperId") == top["id"] for s in sugg), title[:30])
     check("autocomplete: limit respected", len(anon.get("/api/autocomplete", prefix="a", limit=3)[1]) == 3)
 
-    # ------------------------------------------------------------ similar papers
     pid = top["id"]
     status, similar = anon.get(f"/api/papers/{pid}/similar", limit=8)
     scores = [s["score"] for s in similar]
@@ -176,7 +158,6 @@ def main():
     check("similar papers: sorted, scores in 0..1, with reasons",
           scores == sorted(scores, reverse=True) and all(0 <= s <= 1 for s in scores) and all(s["reasons"] for s in similar))
 
-    # ------------------------------------------------------------ accounts
     alice, bob = Client(), Client()
     a_email, b_email = f"alice.{RUN}@example.com", f"bob.{RUN}@example.com"
     status, _ = alice.call("POST", "/api/register", {"name": "Alice <script>x</script>", "email": a_email.upper(), "password": "alice-pass-1"})
@@ -206,7 +187,6 @@ def main():
         status = e.code
     check("HTML-form style post (not JSON) -> 415", status == 415)
 
-    # ------------------------------------------------------------ bookmarks + isolation
     check("bookmark add", alice.call("POST", "/api/bookmarks", {"paperId": pid})[0] == 201)
     check("bookmark add twice is fine", alice.call("POST", "/api/bookmarks", {"paperId": pid})[0] == 201)
     check("bookmark unknown paper -> 404", alice.call("POST", "/api/bookmarks", {"paperId": 99999999})[0] == 404)
@@ -217,10 +197,9 @@ def main():
     check("another user cannot see the bookmark", bob_marks == [])
     check("another user cannot delete the bookmark", bob.call("DELETE", f"/api/bookmarks/{pid}")[0] == 404)
 
-    # ------------------------------------------------------------ history
     search(alice, q="federated learning", year_from=2020)
-    search(alice, q="federated learning", year_from=2020)            # same search again
-    search(alice, q="federated learning", year_from=2020, page=2)    # page turn
+    search(alice, q="federated learning", year_from=2020)
+    search(alice, q="federated learning", year_from=2020, page=2)
     viewed = search(anon, q="edge computing")["results"][0]["id"]
     alice.get(f"/api/papers/{viewed}")
     _, hist = alice.get("/api/history")
@@ -231,7 +210,6 @@ def main():
     check("another user's history is empty", bob_hist == {"searches": [], "viewed": []})
     check("another user cannot delete a search", bob.call("DELETE", f"/api/history/searches/{fl[0]['id']}")[0] == 404)
 
-    # ------------------------------------------------------------ profile + recommendations
     status, prof = alice.call("PUT", "/api/profile", {"name": "Alice A.", "interests": ["edge computing", "edge computing", "privacy"]})
     check("profile update (duplicates removed)", status == 200 and prof["user"]["name"] == "Alice A." and prof["interests"] == ["edge computing", "privacy"])
     check("too many interests -> 400", alice.call("PUT", "/api/profile", {"interests": [str(i) for i in range(30)]})[0] == 400)
@@ -246,7 +224,6 @@ def main():
     check("login with new password", Client().call("POST", "/api/login", {"email": a_email, "password": "new-pass-123"})[0] == 200)
     check("logout", alice.call("POST", "/api/logout")[0] == 200 and alice.get("/api/me")[0] == 401)
 
-    # ------------------------------------------------------------ cross-checks against PostgreSQL
     if DB_URL:
         import psycopg
         with psycopg.connect(DB_URL) as conn, conn.cursor() as cur:
@@ -268,7 +245,6 @@ def main():
             cur.execute("SELECT count(*) FROM papers")
             check("API paper count equals table count", stats["papers"] == cur.fetchone()[0])
 
-    # ------------------------------------------------------------ latency
     times = []
     for q in ["deep learning", "graph neural network", "wireless sensor", "blockchain", "image segmentation",
               "software testing", "user experience", "quantum", "federated learning", "intrusion detection"]:
