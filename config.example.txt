@@ -1,0 +1,1 @@
+host=localhost port=5432 dbname=researchnet user=postgres password=YOUR_PASSWORD_HERE

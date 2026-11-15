@@ -1,0 +1,6 @@
+# your real password lives here, never commit it
+config.txt
+
+# compiled program
+researchnet
+researchnet.exe

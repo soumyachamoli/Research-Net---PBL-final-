@@ -1,0 +1,105 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>ResearchNet</title>
+  <link rel="stylesheet" href="style.css">
+</head>
+<body>
+  <header class="topbar">
+    <a href="#/search" class="logo">Research<span>Net</span></a>
+    <nav>
+      <a href="#/search" id="nav-search">Search</a>
+      <a href="#/history" id="nav-history">My History <span id="history-count" class="count"></span></a>
+    </nav>
+  </header>
+
+  <!-- SEARCH PAGE -->
+  <section id="page-search" class="page">
+    <div class="hero">
+      <h1>Find research papers</h1>
+      <p id="stats" class="muted">Loading papers from PostgreSQL…</p>
+      <form id="search-form" class="searchbar" autocomplete="off">
+        <div class="box">
+          <input id="query" type="search" placeholder="Search by keyword, e.g. machine learning healthcare">
+          <ul id="suggestions" hidden></ul>
+        </div>
+        <button type="submit">Search</button>
+      </form>
+      <p class="tip">Words are combined with AND. Type OR between words to match either.</p>
+    </div>
+
+    <div class="layout">
+      <aside class="filters">
+        <h2>Filters</h2>
+
+        <label>Sort by
+          <select id="f-sort">
+            <option value="0">Default</option>
+            <option value="1">Impact factor: high to low</option>
+            <option value="2">Impact factor: low to high</option>
+            <option value="3">Newest first</option>
+          </select>
+        </label>
+
+        <div class="group">
+          <span class="group-label">Journal quartile</span>
+          <div class="segmented" id="f-quartile">
+            <button type="button" data-q="" class="on">All</button>
+            <button type="button" data-q="Q1">Q1</button>
+            <button type="button" data-q="Q2">Q2</button>
+            <button type="button" data-q="Q3">Q3</button>
+            <button type="button" data-q="Q4">Q4</button>
+          </div>
+        </div>
+
+        <label>Minimum impact factor
+          <select id="f-impact">
+            <option value="0">Any</option>
+            <option value="1">1 or more</option>
+            <option value="3">3 or more</option>
+            <option value="5">5 or more</option>
+            <option value="8">8 or more</option>
+          </select>
+        </label>
+
+        <div class="row">
+          <label>Year from<input id="f-from" inputmode="numeric" placeholder="2015"></label>
+          <label>Year to<input id="f-to" inputmode="numeric" placeholder="2025"></label>
+        </div>
+
+        <label>Author<input id="f-author" placeholder="e.g. Sharma"></label>
+
+        <button type="button" id="f-reset" class="link">Reset filters</button>
+      </aside>
+
+      <div class="results-area">
+        <p id="status" class="status"></p>
+        <ul id="results" class="cards"></ul>
+      </div>
+    </div>
+  </section>
+
+  <!-- PAPER PAGE -->
+  <section id="page-paper" class="page" hidden>
+    <a href="#/search" class="back">&larr; Back to results</a>
+    <article id="paper"></article>
+  </section>
+
+  <!-- HISTORY PAGE -->
+  <section id="page-history" class="page narrow" hidden>
+    <div class="history-head">
+      <div>
+        <h1>My History</h1>
+        <p class="muted">Recently viewed papers, newest first (stored in a linked list).</p>
+      </div>
+      <button type="button" id="clear-history" class="danger">Clear history</button>
+    </div>
+    <h3 class="section-label">RECENTLY VIEWED</h3>
+    <ul id="history" class="cards"></ul>
+  </section>
+
+  <script src="app.js"></script>
+</body>
+</html>

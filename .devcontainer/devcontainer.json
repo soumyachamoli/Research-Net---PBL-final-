@@ -1,0 +1,8 @@
+{
+  "name": "ResearchNet",
+  "image": "mcr.microsoft.com/devcontainers/base:ubuntu-24.04",
+  "postCreateCommand": "bash .devcontainer/setup.sh",
+  "postStartCommand": "sudo service postgresql start",
+  "forwardPorts": [8080],
+  "customizations": { "vscode": { "extensions": ["ms-vscode.cpptools"] } }
+}
