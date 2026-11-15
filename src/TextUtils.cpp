@@ -1,18 +1,13 @@
 #include "TextUtils.h"
-#include <cstring>
+#include <unordered_set>
+using namespace std;
 
-void copyText(char* dest, const char* src, int destSize)
+static bool isWordChar(unsigned char c)
 {
-    int i = 0;
-    while (src[i] != '\0' && i < destSize - 1)
-    {
-        dest[i] = src[i];
-        i++;
-    }
-    dest[i] = '\0';
+    return (c >= 'a' && c <= 'z') || (c >= 'A' && c <= 'Z') || (c >= '0' && c <= '9') || c >= 128;
 }
 
-static char toLower(char c)
+static char toLowerChar(char c)
 {
     if (c >= 'A' && c <= 'Z')
     {
@@ -21,153 +16,123 @@ static char toLower(char c)
     return c;
 }
 
-static bool isLetter(char c)
+string toLowerCopy(const string& text)
 {
-    return (c >= 'a' && c <= 'z') || (c >= 'A' && c <= 'Z');
+    string result = text;
+    for (char& c : result)
+    {
+        c = toLowerChar(c);
+    }
+    return result;
 }
 
-int splitTokens(const char* text, char words[][WORD_SIZE], int maxWords)
+vector<string> tokenize(const string& text)
 {
-    int count = 0;
-    int length = 0;       // length of the word being built
-
-    for (int i = 0; ; i++)
+    vector<string> words;
+    string current;
+    for (char c : text)
     {
-        char c = text[i];
-        if (isLetter(c))
+        if (isWordChar((unsigned char)c))
         {
-            if (length < WORD_SIZE - 1 && count < maxWords)
-            {
-                words[count][length] = toLower(c);
-                length++;
-            }
+            current += toLowerChar(c);
         }
-        else
+        else if (!current.empty())
         {
-            // Any non-letter ends the current word.
-            if (length > 0 && count < maxWords)
-            {
-                words[count][length] = '\0';
-                count++;
-            }
-            length = 0;
-        }
-        if (c == '\0')
-        {
-            break;
+            words.push_back(current);       // any other character ends the word
+            current.clear();
         }
     }
-    return count;
+    if (!current.empty())
+    {
+        words.push_back(current);
+    }
+    return words;
 }
 
-bool isStopWord(const char* word)
+bool isStopWord(const string& word)
 {
-    const char* stopWords[] = {"a", "an", "and", "or", "the", "of", "in", "on", "for", "to",
-                               "with", "by", "is", "are", "as", "at", "from", "into", "its",
-                               "it", "that", "this", "be", "we", "our", "via", "using"};
-    int total = sizeof(stopWords) / sizeof(stopWords[0]);
+    static const unordered_set<string> stopWords = {
+        "a", "an", "and", "or", "the", "of", "in", "on", "for", "to", "with", "by", "is", "are",
+        "as", "at", "from", "into", "its", "it", "that", "this", "these", "those", "be", "been",
+        "was", "were", "we", "our", "us", "via", "using", "based", "which", "can", "also", "has",
+        "have", "had", "not", "but", "such", "than", "their", "they", "there", "then", "both",
+        "between", "over", "under", "more", "most", "other", "some", "each", "all", "any", "one",
+        "two", "new", "use", "used", "paper", "propose", "proposed", "approach", "method", "show",
+        "results", "result", "while", "however", "how", "what", "when", "where", "who", "will",
+        "may", "do", "does", "so", "if", "no", "only", "about", "through", "within", "without"};
 
-    if (strlen(word) < 2)
+    if (word.size() < 2)
     {
-        return true;     // single letters are not useful search words
+        return true;                        // single characters are not useful search words
     }
-    for (int i = 0; i < total; i++)
-    {
-        if (strcmp(word, stopWords[i]) == 0)
-        {
-            return true;
-        }
-    }
-    return false;
+    return stopWords.count(word) > 0;
 }
 
-int splitWords(const char* text, char words[][WORD_SIZE], int maxWords)
+static bool endsWith(const string& word, const string& suffix)
 {
-    char tokens[MAX_WORDS][WORD_SIZE];
-    int tokenCount = splitTokens(text, tokens, MAX_WORDS);
-    int count = 0;
-
-    for (int i = 0; i < tokenCount && count < maxWords; i++)
-    {
-        if (isStopWord(tokens[i]))
-        {
-            continue;
-        }
-        bool alreadyAdded = false;
-        for (int j = 0; j < count; j++)
-        {
-            if (strcmp(words[j], tokens[i]) == 0)
-            {
-                alreadyAdded = true;
-                break;
-            }
-        }
-        if (!alreadyAdded)
-        {
-            copyText(words[count], tokens[i], WORD_SIZE);
-            count++;
-        }
-    }
-    return count;
+    return word.size() >= suffix.size() &&
+           word.compare(word.size() - suffix.size(), suffix.size(), suffix) == 0;
 }
 
-int splitPhrases(const char* text, char phrases[][PHRASE_SIZE], int maxPhrases)
+string stem(const string& word)
 {
-    int count = 0;
-    int length = 0;
-
-    for (int i = 0; ; i++)
+    if (word.size() <= 3)
     {
-        char c = text[i];
-        if (c == ',' || c == '\0')
-        {
-            // Remove spaces at the end of the phrase.
-            while (length > 0 && phrases[count][length - 1] == ' ')
-            {
-                length--;
-            }
-            if (length > 0 && count < maxPhrases)
-            {
-                phrases[count][length] = '\0';
-                count++;
-            }
-            length = 0;
-            if (c == '\0')
-            {
-                break;
-            }
-        }
-        else if (count < maxPhrases && length < PHRASE_SIZE - 1)
-        {
-            if (c == ' ' && length == 0)
-            {
-                continue;    // skip spaces at the start of the phrase
-            }
-            phrases[count][length] = toLower(c);
-            length++;
-        }
+        return word;
     }
-    return count;
+    // Plurals.
+    if (endsWith(word, "ies") && word.size() > 4)
+    {
+        return word.substr(0, word.size() - 3) + "y";          // studies -> study
+    }
+    if (endsWith(word, "sses"))
+    {
+        return word.substr(0, word.size() - 2);                // classes -> class
+    }
+    if (endsWith(word, "s") && !endsWith(word, "ss") && !endsWith(word, "us") && !endsWith(word, "is"))
+    {
+        return word.substr(0, word.size() - 1);                // networks -> network
+    }
+    // -ing / -ed, only when a reasonable stem (4+ letters) is left.
+    if (endsWith(word, "ing") && word.size() >= 7)
+    {
+        return word.substr(0, word.size() - 3);                // learning -> learn
+    }
+    if (endsWith(word, "ed") && word.size() >= 6)
+    {
+        return word.substr(0, word.size() - 2);                // trained -> train
+    }
+    return word;
 }
 
-bool containsIgnoreCase(const char* text, const char* part)
+vector<string> analyze(const string& text)
 {
-    if (part[0] == '\0')
+    vector<string> terms;
+    for (const string& word : tokenize(text))
     {
-        return true;
-    }
-    for (int start = 0; text[start] != '\0'; start++)
-    {
-        int i = 0;
-        while (part[i] != '\0' && text[start + i] != '\0' &&
-               toLower(text[start + i]) == toLower(part[i]))
+        if (!isStopWord(word))
         {
-            i++;
-        }
-        if (part[i] == '\0')
-        {
-            return true;      // every character of part matched
+            terms.push_back(stem(word));
         }
     }
-    return false;
+    return terms;
+}
+
+string normalizeKey(const string& text)
+{
+    string key;
+    for (const string& word : tokenize(text))
+    {
+        if (!key.empty())
+        {
+            key += ' ';
+        }
+        key += word;
+    }
+    return key;
+}
+
+bool containsIgnoreCase(const string& text, const string& part)
+{
+    return toLowerCopy(text).find(toLowerCopy(part)) != string::npos;
 }

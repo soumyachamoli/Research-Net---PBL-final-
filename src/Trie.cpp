@@ -1,167 +1,164 @@
 #include "Trie.h"
+#include "TextUtils.h"
+#include <algorithm>
+using namespace std;
 
-TrieNode* Trie::createNode()
+static const size_t MAX_KEY_LENGTH = 80;     // long titles are matched on their first 80 characters
+
+Trie::Trie()
 {
-    TrieNode* node = new TrieNode;
-    for (int i = 0; i < ALPHABET_SIZE; i++)
-    {
-        node->children[i] = nullptr;
-    }
-    node->isEndOfWord = false;
-    return node;
+    nodes_.emplace_back();                   // the root
 }
 
-// 'a'..'z' -> 0..25, space -> 26. Uppercase counts as lowercase. Other characters -> -1 (skipped).
-int Trie::charToIndex(char c)
+int Trie::findChild(int node, char c) const
 {
-    if (c >= 'A' && c <= 'Z')
+    for (const auto& child : nodes_[node].children)
     {
-        c = c - 'A' + 'a';
-    }
-    if (c >= 'a' && c <= 'z')
-    {
-        return c - 'a';
-    }
-    if (c == ' ')
-    {
-        return 26;
+        if (child.first == c)
+        {
+            return child.second;
+        }
     }
     return -1;
 }
 
-char Trie::indexToChar(int index)
+int Trie::addChild(int node, char c)
 {
-    if (index == 26)
+    int child = findChild(node, c);
+    if (child != -1)
     {
-        return ' ';
+        return child;
     }
-    return 'a' + index;
+    nodes_.emplace_back();                   // the path does not exist yet: build it
+    child = (int)nodes_.size() - 1;
+    nodes_[node].children.push_back({c, child});
+    return child;
 }
 
-Trie::Trie()
+void Trie::insert(const string& text, const string& kind, double weight, int paperId)
 {
-    root = createNode();
-}
-
-Trie::~Trie()
-{
-    deleteNode(root);
-}
-
-// Deletes a node and everything below it: children first, then the node itself.
-void Trie::deleteNode(TrieNode* node)
-{
-    if (node == nullptr)
+    string key = normalizeKey(text);
+    if (key.empty())
     {
         return;
     }
-    for (int i = 0; i < ALPHABET_SIZE; i++)
+    if (key.size() > MAX_KEY_LENGTH)
     {
-        deleteNode(node->children[i]);
-    }
-    delete node;
-}
-
-void Trie::insert(const char* word)
-{
-    TrieNode* current = root;
-    bool addedSomething = false;
-
-    for (int i = 0; word[i] != '\0'; i++)
-    {
-        int index = charToIndex(word[i]);
-        if (index == -1)
-        {
-            continue;
-        }
-        if (current->children[index] == nullptr)
-        {
-            current->children[index] = createNode();   // the path does not exist yet: build it
-        }
-        current = current->children[index];            // go one level down
-        addedSomething = true;
+        key.resize(MAX_KEY_LENGTH);
     }
 
-    if (addedSomething)
+    // Same phrase again (e.g. a keyword used by many papers): just make it more important.
+    auto found = entryByKey_.find(key);
+    if (found != entryByKey_.end())
     {
-        current->isEndOfWord = true;                   // mark where the word ends
-    }
-}
-
-bool Trie::search(const char* word)
-{
-    TrieNode* current = root;
-
-    for (int i = 0; word[i] != '\0'; i++)
-    {
-        int index = charToIndex(word[i]);
-        if (index == -1)
-        {
-            continue;
-        }
-        if (current->children[index] == nullptr)
-        {
-            return false;                              // the path stops: word not stored
-        }
-        current = current->children[index];
-    }
-    return current->isEndOfWord;
-}
-
-// Visits every node below `node` (depth-first). `buffer` holds the letters on the
-// current path; whenever a word ends, the buffer is copied into results.
-void Trie::collectWords(TrieNode* node, char* buffer, int depth,
-                        char results[][PHRASE_SIZE], int& count, int maxResults)
-{
-    if (count >= maxResults)
-    {
+        Suggestion& existing = entries_[found->second];
+        existing.weight += weight;
         return;
     }
-    if (node->isEndOfWord)
+
+    int current = 0;
+    for (char c : key)
     {
-        buffer[depth] = '\0';
-        copyText(results[count], buffer, PHRASE_SIZE);
-        count++;
+        current = addChild(current, c);      // go one level down, creating nodes as needed
     }
-    for (int i = 0; i < ALPHABET_SIZE; i++)
-    {
-        if (node->children[i] != nullptr && depth < PHRASE_SIZE - 1)
-        {
-            buffer[depth] = indexToChar(i);
-            collectWords(node->children[i], buffer, depth + 1, results, count, maxResults);
-        }
-    }
+    entries_.push_back({text, kind, weight, paperId});
+    nodes_[current].entry = (int)entries_.size() - 1;   // mark where the phrase ends
+    entryByKey_[key] = nodes_[current].entry;
 }
 
-int Trie::autocomplete(const char* prefix, char results[][PHRASE_SIZE], int maxResults)
+// true if entry a should be suggested before entry b.
+bool Trie::better(int a, int b) const
 {
-    char buffer[PHRASE_SIZE];
-    int depth = 0;
-    TrieNode* current = root;
-
-    // Step 1: walk down to the last letter of the prefix.
-    for (int i = 0; prefix[i] != '\0' && depth < PHRASE_SIZE - 1; i++)
+    if (entries_[a].weight != entries_[b].weight)
     {
-        int index = charToIndex(prefix[i]);
-        if (index == -1)
-        {
-            continue;
-        }
-        if (current->children[index] == nullptr)
-        {
-            return 0;                                  // no word starts with this prefix
-        }
-        current = current->children[index];
-        buffer[depth] = indexToChar(index);
-        depth++;
+        return entries_[a].weight > entries_[b].weight;
     }
-    if (depth == 0)
-    {
-        return 0;                                      // empty prefix: suggest nothing
-    }
+    return entries_[a].text < entries_[b].text;
+}
 
-    // Step 2: collect every word below that node.
-    int count = 0;
-    collectWords(current, buffer, depth, results, count, maxResults);
-    return count;
+// Post-order walk: a node's best list = its own phrase + the best lists of its children,
+// sorted by weight and cut to TOP_K.
+void Trie::collectBest(int node)
+{
+    vector<int> candidates;
+    if (nodes_[node].entry != -1)
+    {
+        candidates.push_back(nodes_[node].entry);
+    }
+    for (const auto& child : nodes_[node].children)
+    {
+        collectBest(child.second);
+        const vector<int>& childBest = nodes_[child.second].best;
+        candidates.insert(candidates.end(), childBest.begin(), childBest.end());
+    }
+    sort(candidates.begin(), candidates.end(), [this](int a, int b) { return better(a, b); });
+    if (candidates.size() > TOP_K)
+    {
+        candidates.resize(TOP_K);
+    }
+    nodes_[node].best = candidates;
+}
+
+void Trie::finalize()
+{
+    collectBest(0);
+}
+
+int Trie::findNode(const string& key) const
+{
+    int current = 0;
+    for (char c : key)
+    {
+        current = findChild(current, c);
+        if (current == -1)
+        {
+            return -1;                       // the path stops: nothing starts with this prefix
+        }
+    }
+    return current;
+}
+
+bool Trie::contains(const string& text) const
+{
+    int node = findNode(normalizeKey(text));
+    return node != -1 && nodes_[node].entry != -1;
+}
+
+vector<Suggestion> Trie::autocomplete(const string& prefix, size_t maxResults) const
+{
+    vector<Suggestion> results;
+    string key = normalizeKey(prefix);
+    // Keep a trailing space ("deep ") so it only matches phrases with a next word.
+    if (!prefix.empty() && prefix.back() == ' ' && !key.empty())
+    {
+        key += ' ';
+    }
+    if (key.empty())
+    {
+        return results;                      // empty prefix: suggest nothing
+    }
+    int node = findNode(key);
+    if (node == -1)
+    {
+        return results;
+    }
+    for (int entry : nodes_[node].best)
+    {
+        if (results.size() >= maxResults)
+        {
+            break;
+        }
+        results.push_back(entries_[entry]);
+    }
+    return results;
+}
+
+size_t Trie::nodeCount() const
+{
+    return nodes_.size();
+}
+
+size_t Trie::size() const
+{
+    return entries_.size();
 }

@@ -1,29 +1,36 @@
 #ifndef TEXTUTILS_H
 #define TEXTUTILS_H
 
-// Text processing used by the Trie, the Inverted Index and the search.
+#include <string>
+#include <vector>
 
-const int MAX_WORDS = 400;     // most words we take from one text
-const int WORD_SIZE = 50;      // longest single word
-const int PHRASE_SIZE = 100;   // longest keyword phrase, e.g. "machine learning"
+// Text processing shared by the Trie, the Inverted Index and the recommender.
+//
+//   "Deep Networks for Image-Classification"
+//      tokenize  -> deep, networks, for, image, classification
+//      analyze   -> deep, network, image, classif...   (stop words removed, light stemming)
 
-// Copies src into dest without writing past destSize (always ends with '\0').
-void copyText(char* dest, const char* src, int destSize);
+std::string toLowerCopy(const std::string& text);
 
-// Splits text into lowercase words made of letters a-z only.
-// "Deep Learning for NLP!" -> "deep", "learning", "for", "nlp"
-int splitTokens(const char* text, char words[][WORD_SIZE], int maxWords);
+// Splits text into lower-case words. Letters and digits are kept (so "gpt4" and "5g"
+// survive); every other ASCII character ends a word. Bytes >= 128 (UTF-8 letters such
+// as the "u" in "Muller" with an umlaut) are kept inside words.
+std::vector<std::string> tokenize(const std::string& text);
 
-// Same as splitTokens, but also removes stop words ("the", "of", "and", ...)
-// and removes repeated words.
-int splitWords(const char* text, char words[][WORD_SIZE], int maxWords);
+bool isStopWord(const std::string& word);
 
-// Splits "machine learning, Healthcare" into "machine learning" and "healthcare".
-int splitPhrases(const char* text, char phrases[][PHRASE_SIZE], int maxPhrases);
+// Light English stemmer: "networks" -> "network", "studies" -> "study",
+// "learning" -> "learn". Queries and papers go through the same function, so a search
+// for "transformer" also finds "transformers".
+std::string stem(const std::string& word);
 
-bool isStopWord(const char* word);
+// tokenize + remove stop words + stem: the words that go into the inverted index.
+std::vector<std::string> analyze(const std::string& text);
 
-// true if `part` appears anywhere in `text`, ignoring upper/lower case.
-bool containsIgnoreCase(const char* text, const char* part);
+// Key used by the Trie: lower case, letters/digits/spaces only, single spaces.
+// "  Machine-Learning " -> "machine learning"
+std::string normalizeKey(const std::string& text);
+
+bool containsIgnoreCase(const std::string& text, const std::string& part);
 
 #endif
