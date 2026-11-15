@@ -5,10 +5,33 @@
 #include "Database.h"
 #include "EngineHolder.h"
 #include "PaperRepository.h"
+#include "UserRepository.h"
 #include "httplib.h"
+#include <chrono>
+#include <deque>
+#include <mutex>
+#include <optional>
+#include <string>
+#include <unordered_map>
+
+// Counts failed logins per client; too many in 15 minutes -> temporarily blocked.
+class LoginLimiter
+{
+public:
+    bool blocked(const std::string& client);
+    void recordFailure(const std::string& client);
+    void reset(const std::string& client);
+
+private:
+    std::mutex mutex_;
+    std::unordered_map<std::string, std::deque<std::chrono::steady_clock::time_point>> failures_;
+    void forgetOld(std::deque<std::chrono::steady_clock::time_point>& times);
+};
 
 // The REST API and the static website (web/ folder), on top of cpp-httplib.
-// Route handlers are grouped by feature: PaperRoutes.cpp (search, papers, autocomplete).
+// Route handlers are grouped by feature:
+//   PaperRoutes.cpp  search, filters, autocomplete, paper details
+//   AuthRoutes.cpp   register, login, logout, current user
 class WebServer
 {
 public:
@@ -20,12 +43,21 @@ private:
     Database& db_;
     EngineHolder& engines_;
     PaperRepository papers_;
+    UserRepository users_;
+    LoginLimiter loginLimiter_;
     httplib::Server server_;
 
     void registerPaperRoutes();
+    void registerAuthRoutes();
 
-    // Logged-in user of a request, 0 if none.
+    // Logged-in user of a request (from the session cookie), if any.
+    std::optional<User> currentUser(const httplib::Request& req);
     int currentUserId(const httplib::Request& req);
+    // Like currentUser, but answers "401 Please log in" when nobody is logged in.
+    std::optional<User> requireUser(const httplib::Request& req, httplib::Response& res);
+    std::string clientAddress(const httplib::Request& req) const;
+    void setSessionCookie(httplib::Response& res, const std::string& token, int maxAgeSeconds);
+
     // Called after a search / when a paper is opened (records history for logged-in users).
     void onSearch(int userId, const std::string& query, const PaperFilter& filter, long resultCount);
     void onPaperViewed(int userId, int paperId);
