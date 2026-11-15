@@ -11,7 +11,7 @@ cd "$(dirname "$0")"
 
 CXX="${CXX:-g++}"
 CXXFLAGS="-std=c++17 -O2 -Wall -Wextra -Iinclude -Ithird_party"
-CORE="src/TextUtils.cpp src/Trie.cpp"
+CORE="src/TextUtils.cpp src/Trie.cpp src/InvertedIndex.cpp src/SearchEngine.cpp"
 
 if [[ "${OS:-}" == "Windows_NT" ]]; then
     PG_HOME="${PG_HOME:-C:/Program Files/PostgreSQL/18}"

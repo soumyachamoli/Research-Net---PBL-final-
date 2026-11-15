@@ -1,71 +1,62 @@
 #ifndef SEARCHENGINE_H
 #define SEARCHENGINE_H
 
-#include "Database.h"
-#include "History.h"
 #include "InvertedIndex.h"
-#include "LinkedList.h"
 #include "Paper.h"
 #include "Trie.h"
+#include <string>
+#include <unordered_map>
+#include <vector>
 
-// Sort options for search results.
-const int SORT_DEFAULT = 0;        // by paper ID
-const int SORT_IMPACT_HIGH = 1;    // highest impact factor first
-const int SORT_IMPACT_LOW = 2;     // lowest impact factor first
-const int SORT_NEWEST = 3;         // newest year first
-
-// What the user chose in the filter panel. 0 or "" means "no filter".
-struct SearchFilter
-{
-    int yearFrom;
-    int yearTo;
-    char author[100];
-    char quartile[QUARTILE_SIZE];
-    float minImpact;
-    int sortBy;
-};
-
-// One recommended paper and why it was recommended.
-struct Recommendation
+// One search result: a paper id and its relevance score (cosine similarity, 0..1).
+struct SearchHit
 {
     int paperId;
-    int score;
-    int commonKeywords;
-    int commonAuthors;
+    double score;
 };
 
-// Holds the papers loaded from PostgreSQL and the data structures built from them.
+// Holds the papers loaded from PostgreSQL and the data structures built from them:
+//   - Trie            : autocomplete for titles, keywords, topics, categories, authors
+//   - InvertedIndex   : ranked keyword search and the TF-IDF vectors for recommendations
+//   - unordered_maps  : paper id -> position, author -> papers, keyword -> papers
+// The engine is built once and then only read, so many requests can use it at the same time.
 class SearchEngine
 {
-private:
-    Paper* papers;           // dynamic array of papers
-    int paperCount;
-    Trie trie;
-    InvertedIndex index;
-    History history;
-
-    void addPaperToStructures(const Paper& paper);
-    int findIndex(int id) const;
-    bool passesFilter(const Paper& paper, const SearchFilter& filter) const;
-    bool comesBefore(const Paper& a, const Paper& b, int sortBy) const;
-
 public:
-    SearchEngine();
-    ~SearchEngine();
+    explicit SearchEngine(std::vector<Paper> papers);
 
-    bool load(Database& db);
-    int getPaperCount() const;
-    int getWordCount() const;
-    const Paper* findPaper(int id) const;
+    // "machine learning"        -> papers containing machine AND learning (default)
+    // "vision OR translation"   -> papers containing vision OR translation
+    // Results are ranked by TF-IDF cosine similarity to the query.
+    std::vector<SearchHit> search(const std::string& query) const;
 
-    void keywordSearch(const char* query, LinkedList& results);
-    int searchPapers(const char* query, const SearchFilter& filter, int resultIds[], int maxResults);
-    int autocomplete(const char* prefix, char results[][PHRASE_SIZE], int maxResults);
-    int recommend(int paperId, Recommendation results[], int maxResults);
+    std::vector<Suggestion> autocomplete(const std::string& prefix, size_t maxResults) const;
 
-    History& getHistory();
+    const Paper* findPaper(int id) const;      // nullptr if unknown
+    int findIndex(int id) const;               // position in papers(), or -1
+    const std::vector<Paper>& papers() const;
+    const InvertedIndex& index() const;
+    const std::vector<int>& papersByAuthor(int authorId) const;
+    const std::vector<int>& papersWithKeyword(const std::string& keyword) const;   // lower-case keyword
+
+    int minYear() const;
+    int maxYear() const;
+    double maxImpactFactor() const;
+    size_t trieNodes() const;
+
+private:
+    std::vector<Paper> papers_;
+    InvertedIndex index_;
+    Trie trie_;
+    std::unordered_map<int, int> positionById_;
+    std::unordered_map<int, std::vector<int>> papersByAuthor_;            // author id -> positions
+    std::unordered_map<std::string, std::vector<int>> papersByKeyword_;   // keyword -> positions
+    int minYear_ = 0;
+    int maxYear_ = 0;
+    double maxImpact_ = 0;
+
+    void addToIndex(int position, const Paper& paper);
+    void addToTrie(const Paper& paper);
 };
-
-void clearFilter(SearchFilter& filter);
 
 #endif
