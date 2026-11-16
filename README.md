@@ -11,6 +11,17 @@ It currently holds **10,319 genuine research papers** from [OpenAlex](https://op
 abstract and DOI) from ten Computer Science research areas, with 34,007 authors, 1,707
 journals/venues and 31,118 keywords. No record is invented.
 
+## Use of AI tools
+
+This project was built with substantial help from **Claude**, an AI assistant made by
+Anthropic. I wrote the first version (v4: a C++ Trie, linked lists and a hash-table
+inverted index over papers stored in PostgreSQL, with a console menu and a simple
+website) and set the requirements for this version. Claude reviewed v4 and then wrote
+most of the current code to those requirements: the STL rewrite of the data structures,
+the TF-IDF search and recommender, the REST API, accounts, the website, the OpenAlex
+import scripts, the tests and the deployment setup. I ran, tested and reviewed the
+result.
+
 ## Features
 
 | Area | What it does |
