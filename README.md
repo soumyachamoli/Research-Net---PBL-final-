@@ -11,6 +11,46 @@ It currently holds **10,319 genuine research papers** from [OpenAlex](https://op
 abstract and DOI) from ten Computer Science research areas, with 34,007 authors, 1,707
 journals/venues and 31,118 keywords. No record is invented.
 
+## Quick start: run it on your own computer
+
+Choose **one** of these. Each gives you the full website with all 10,319 papers.
+
+### Option A: Docker (Windows, Mac or Linux, recommended)
+
+1. Install **Docker Desktop** from https://www.docker.com/products/docker-desktop and start it.
+   Wait until it says Docker is running.
+2. Download this project. Either click the green **Code** button on GitHub, then
+   **Download ZIP**, and unzip it, or run:
+   ```
+   git clone https://github.com/soumyachamoli/Research-Net---PBL-final-.git
+   ```
+3. Open a terminal **inside the project folder** (on Windows: open the folder, click
+   the address bar, type `cmd` and press Enter) and run:
+   ```
+   docker compose up --build
+   ```
+4. The first run takes about 5 minutes: it builds the C++ program and loads the papers.
+   When you see `ResearchNet running at http://0.0.0.0:8080`, open
+   **http://localhost:8080** in your browser.
+
+To stop it press **Ctrl + C**. Next time, `docker compose up` starts in seconds.
+To delete everything (database included): `docker compose down -v`.
+
+If port 8080 is already used on your computer, change `"8080:8080"` in
+`docker-compose.yml` to `"8081:8080"` and open http://localhost:8081.
+
+### Option B: GitHub Codespaces (nothing to install, runs in the browser)
+
+1. On the GitHub page, click **Code**, then **Codespaces**, then
+   **Create codespace on main** (you need a free GitHub account).
+2. Wait about 5 minutes while it installs PostgreSQL, loads the papers and builds.
+3. In the terminal at the bottom, run `./researchnet`, then click **Open in Browser**
+   when the pop-up appears (or open the **Ports** tab and click the 8080 link).
+
+### Option C: install everything yourself
+
+See [Run it locally](#run-it-locally) below.
+
 ## Use of AI tools
 
 This project was built with substantial help from **Claude**, an AI assistant made by

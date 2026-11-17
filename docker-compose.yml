@@ -1,0 +1,46 @@
+name: researchnet
+
+services:
+  db:
+    image: postgres:16
+    environment:
+      POSTGRES_USER: researchnet
+      POSTGRES_PASSWORD: researchnet-local
+      POSTGRES_DB: researchnet
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U researchnet -d researchnet"]
+      interval: 3s
+      timeout: 3s
+      retries: 40
+
+  loader:
+    image: python:3.12-slim
+    working_dir: /app
+    volumes:
+      - ./tools:/app/tools:ro
+      - ./data:/app/data:ro
+      - ./sql:/app/sql:ro
+    environment:
+      DATABASE_URL: postgresql://researchnet:researchnet-local@db:5432/researchnet
+    command: sh -c "pip install --quiet --disable-pip-version-check --root-user-action=ignore 'psycopg[binary]==3.2.3' && python tools/load_papers.py"
+    depends_on:
+      db:
+        condition: service_healthy
+
+  app:
+    build: .
+    environment:
+      DATABASE_URL: postgresql://researchnet:researchnet-local@db:5432/researchnet
+      COOKIE_SECURE: "0"
+      TRUST_PROXY: "0"
+    ports:
+      - "8080:8080"
+    depends_on:
+      loader:
+        condition: service_completed_successfully
+    restart: unless-stopped
+
+volumes:
+  pgdata:
