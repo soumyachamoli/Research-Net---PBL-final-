@@ -35,6 +35,7 @@ public:
     int integer(int row, const std::string& column) const;
     std::optional<double> number(int row, const std::string& column) const;
     bool boolean(int row, const std::string& column) const;
+    long affected() const;
 private:
     std::shared_ptr<PGresult> result_;
 };

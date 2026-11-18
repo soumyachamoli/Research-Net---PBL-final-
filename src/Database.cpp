@@ -48,6 +48,11 @@ optional<double> Result::number(int row, const string& name) const
     return strtod(text(row, name).c_str(), nullptr);
 }
 
+long Result::affected() const
+{
+    return atol(PQcmdTuples(result_.get()));
+}
+
 bool Result::boolean(int row, const string& name) const
 {
     return text(row, name) == "t";

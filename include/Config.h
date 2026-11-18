@@ -13,6 +13,7 @@ struct Config
     bool cookieSecure = false;
     bool trustProxy = false;
     int reloadSeconds = 60;
+    int historyDays = 180;
     std::string webRoot = "web";
     RecommenderWeights weights;
 };

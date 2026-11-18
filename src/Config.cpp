@@ -46,6 +46,7 @@ Config loadConfig()
     config.cookieSecure = env("COOKIE_SECURE") == "1";
     config.trustProxy = env("TRUST_PROXY") == "1";
     config.reloadSeconds = envInt("RELOAD_SECONDS", config.reloadSeconds);
+    config.historyDays = max(0, envInt("HISTORY_DAYS", config.historyDays));
     config.webRoot = env("WEB_ROOT", config.webRoot);
     string weights = env("RN_WEIGHTS");
     if (!weights.empty() && !config.weights.parse(weights))

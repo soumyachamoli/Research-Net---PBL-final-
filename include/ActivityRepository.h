@@ -26,6 +26,7 @@ public:
     bool deleteView(int userId, int paperId);
 
     void clearHistory(int userId);
+    long deleteHistoryOlderThan(int days);
 
     std::vector<std::string> interests(int userId);
     void setInterests(int userId, const std::vector<std::string>& interests);

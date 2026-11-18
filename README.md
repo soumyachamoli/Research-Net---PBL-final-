@@ -285,6 +285,7 @@ installs everything, imports the papers and builds. Then run `./researchnet`.
 | `COOKIE_SECURE` | off | `1` = session cookie only over HTTPS (production) |
 | `TRUST_PROXY` | off | `1` = client IP from `X-Forwarded-For` (behind a host's proxy) |
 | `RELOAD_SECONDS` | 60 | how often to check for changed papers (0 = never) |
+| `HISTORY_DAYS` | 180 | search and view history older than this is deleted hourly (0 = keep forever) |
 | `RN_WEIGHTS` | `0.5,0.2,0.15,0.1,0.05` | recommender weights |
 
 ### Refreshing the data

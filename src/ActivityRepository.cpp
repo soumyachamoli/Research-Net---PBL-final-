@@ -129,6 +129,17 @@ void ActivityRepository::clearHistory(int userId)
     });
 }
 
+long ActivityRepository::deleteHistoryOlderThan(int days)
+{
+    long removed = 0;
+    db_.transaction([&](Transaction& tx) {
+        Param age = toParam(days);
+        removed += tx.query("DELETE FROM search_history WHERE created_at < now() - make_interval(days => $1)", {age}).affected();
+        removed += tx.query("DELETE FROM view_history WHERE viewed_at < now() - make_interval(days => $1)", {age}).affected();
+    });
+    return removed;
+}
+
 vector<string> ActivityRepository::interests(int userId)
 {
     Result r = db_.query("SELECT interest FROM user_interests WHERE user_id = $1 ORDER BY interest",

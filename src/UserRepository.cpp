@@ -54,7 +54,6 @@ string UserRepository::createSession(int userId, int days)
                 SELECT digest(value, 'sha256'), $1, now() + make_interval(days => $2) FROM token)
         SELECT value FROM token)",
         {toParam(userId), toParam(days)});
-    db_.query("DELETE FROM sessions WHERE expires_at < now()");
     return r.text(0, "value");
 }
 
@@ -75,6 +74,11 @@ optional<User> UserRepository::userForSession(const string& token)
 void UserRepository::deleteSession(const string& token)
 {
     db_.query("DELETE FROM sessions WHERE token_hash = digest($1, 'sha256')", {token});
+}
+
+long UserRepository::deleteExpiredSessions()
+{
+    return db_.query("DELETE FROM sessions WHERE expires_at < now()").affected();
 }
 
 optional<User> UserRepository::findById(int userId)

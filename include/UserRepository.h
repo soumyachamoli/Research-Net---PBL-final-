@@ -24,6 +24,7 @@ public:
     std::string createSession(int userId, int days);
     std::optional<User> userForSession(const std::string& token);
     void deleteSession(const std::string& token);
+    long deleteExpiredSessions();
 
     std::optional<User> findById(int userId);
     void updateName(int userId, const std::string& name);

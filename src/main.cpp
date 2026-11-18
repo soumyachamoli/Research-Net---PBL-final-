@@ -1,7 +1,9 @@
+#include "ActivityRepository.h"
 #include "Config.h"
 #include "Database.h"
 #include "EngineHolder.h"
 #include "PaperRepository.h"
+#include "UserRepository.h"
 #include "WebServer.h"
 #include <chrono>
 #include <cstring>
@@ -41,6 +43,30 @@ static void watchForChanges(Database& db, EngineHolder& engines, int seconds)
     }
 }
 
+static void cleanUpEveryHour(Database& db, int historyDays)
+{
+    ActivityRepository activity(db);
+    UserRepository users(db);
+    while (true)
+    {
+        try
+        {
+            long sessions = users.deleteExpiredSessions();
+            long history = historyDays > 0 ? activity.deleteHistoryOlderThan(historyDays) : 0;
+            if (sessions + history > 0)
+            {
+                cout << "Cleanup: removed " << sessions << " expired sessions and " << history
+                     << " history entries older than " << historyDays << " days" << endl;
+            }
+        }
+        catch (const exception& e)
+        {
+            cerr << "Cleanup failed (will retry): " << e.what() << endl;
+        }
+        this_thread::sleep_for(chrono::hours(1));
+    }
+}
+
 int main(int argc, char* argv[])
 {
     try
@@ -66,6 +92,7 @@ int main(int argc, char* argv[])
         {
             thread(watchForChanges, ref(db), ref(engines), config.reloadSeconds).detach();
         }
+        thread(cleanUpEveryHour, ref(db), config.historyDays).detach();
         WebServer server(config, db, engines);
         return server.start() ? 0 : 1;
     }
