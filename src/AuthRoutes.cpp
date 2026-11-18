@@ -121,6 +121,26 @@ void WebServer::registerAuthRoutes()
         sendJson(res, 200, {{"ok", true}});
     });
 
+    post("/api/account/delete", [this](const httplib::Request& req, httplib::Response& res) {
+        optional<User> user = requireUser(req, res);
+        if (!user)
+        {
+            return;
+        }
+        string password = jsonText(jsonBody(req), "password", 200);
+        if (password.empty())
+        {
+            throw BadRequest("Please enter your password to confirm");
+        }
+        if (!users_.deleteAccount(user->id, password))
+        {
+            sendError(res, 403, "Password is wrong");
+            return;
+        }
+        setSessionCookie(res, "", 0);
+        sendJson(res, 200, {{"ok", true}});
+    });
+
     server_.Get("/api/me", [this](const httplib::Request& req, httplib::Response& res) {
         optional<User> user = requireUser(req, res);
         if (user)

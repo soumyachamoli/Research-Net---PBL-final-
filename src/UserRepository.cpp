@@ -113,3 +113,10 @@ bool UserRepository::changePassword(int userId, const string& currentPassword, c
     });
     return changed;
 }
+
+bool UserRepository::deleteAccount(int userId, const string& password)
+{
+    Result r = db_.query("DELETE FROM users WHERE id = $1 AND password_hash = crypt($2, password_hash) RETURNING id",
+                         {toParam(userId), password});
+    return r.rows() > 0;
+}

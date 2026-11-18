@@ -913,6 +913,31 @@
       if (r.ok) pwForm.reset();
     });
 
+    const deleteMsg = h('div', { role: 'status' });
+    const deletePassword = h('input', { id: 'p-delete', type: 'password', class: 'input', autocomplete: 'current-password' });
+    const deleteArea = h('div', { class: 'confirm-row' });
+    function showDeleteButton() {
+      clear(deleteArea).append(h('button', { class: 'btn btn-danger', type: 'button', onclick: askDelete }, icon('trash'), 'Delete my account'));
+    }
+    function askDelete() {
+      if (!deletePassword.value) { clear(deleteMsg).append(h('div', { class: 'form-error' }, 'Enter your password first.')); return; }
+      clear(deleteArea).append(h('span', null, 'Delete your account, saved papers and history for good?'),
+        h('button', { class: 'btn btn-danger btn-sm', type: 'button', onclick: async () => {
+          const r = await api('/api/account/delete', { method: 'POST', body: { password: deletePassword.value } });
+          if (!r.ok) { clear(deleteMsg).append(h('div', { class: 'form-error' }, errorText(r))); showDeleteButton(); return; }
+          state.user = null;
+          toast('Your account was deleted');
+          go('/');
+        } }, 'Yes, delete'),
+        h('button', { class: 'btn btn-ghost btn-sm', type: 'button', onclick: showDeleteButton }, 'Cancel'));
+    }
+    showDeleteButton();
+    const deletePanel = h('div', { class: 'panel' }, h('h2', null, 'Delete account'),
+      h('p', { class: 'muted' }, 'Removes your account, saved papers, search history and interests permanently.'),
+      deleteMsg,
+      h('div', { class: 'field' }, h('label', { for: 'p-delete' }, 'Password'), deletePassword),
+      deleteArea);
+
     const counts = profile.counts;
     append(main, [
       h('div', { class: 'page-header' },
@@ -930,7 +955,8 @@
       h('div', { class: 'grid-2 section' },
         h('div', { class: 'stack' },
           h('div', { class: 'panel' }, h('h2', null, 'Account'), nameForm),
-          h('div', { class: 'panel' }, h('h2', null, 'Change password'), pwForm)),
+          h('div', { class: 'panel' }, h('h2', null, 'Change password'), pwForm),
+          deletePanel),
         h('div', { class: 'panel' }, h('h2', null, 'Research interests'),
           h('p', { class: 'muted' }, 'Interests guide your recommendations together with your saved papers and searches.'),
           interestForm)),

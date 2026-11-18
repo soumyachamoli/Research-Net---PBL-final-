@@ -29,6 +29,7 @@ public:
     std::optional<User> findById(int userId);
     void updateName(int userId, const std::string& name);
     bool changePassword(int userId, const std::string& currentPassword, const std::string& newPassword);
+    bool deleteAccount(int userId, const std::string& password);
 
 private:
     Database& db_;

@@ -224,6 +224,18 @@ def main():
     check("login with new password", Client().call("POST", "/api/login", {"email": a_email, "password": "new-pass-123"})[0] == 200)
     check("logout", alice.call("POST", "/api/logout")[0] == 200 and alice.get("/api/me")[0] == 401)
 
+    carol = Client()
+    c_email = f"carol.{RUN}@example.com"
+    carol.call("POST", "/api/register", {"name": "Carol", "email": c_email, "password": "carol-pass-1"})
+    carol.call("POST", "/api/bookmarks", {"paperId": pid})
+    check("delete account: login required", anon.call("POST", "/api/account/delete", {"password": "x"})[0] == 401)
+    check("delete account: wrong password -> 403", carol.call("POST", "/api/account/delete", {"password": "wrong-one"})[0] == 403)
+    check("delete account", carol.call("POST", "/api/account/delete", {"password": "carol-pass-1"})[0] == 200)
+    check("deleted account is logged out and cannot log in",
+          carol.get("/api/me")[0] == 401 and Client().call("POST", "/api/login", {"email": c_email, "password": "carol-pass-1"})[0] == 401)
+    check("email can be registered again after deletion",
+          Client().call("POST", "/api/register", {"name": "Carol", "email": c_email, "password": "carol-pass-2"})[0] == 201)
+
     if DB_URL:
         import psycopg
         with psycopg.connect(DB_URL) as conn, conn.cursor() as cur:
