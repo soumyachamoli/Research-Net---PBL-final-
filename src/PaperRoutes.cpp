@@ -44,7 +44,16 @@ void WebServer::registerPaperRoutes()
 {
     server_.Get("/api/health", [this](const httplib::Request&, httplib::Response& res) {
         auto engine = engines_.get();
-        sendJson(res, 200, {{"status", "ok"}, {"papers", engine->papers().size()}});
+        try
+        {
+            db_.query("SELECT 1");
+        }
+        catch (const DatabaseError&)
+        {
+            sendJson(res, 503, {{"status", "unavailable"}, {"database", "unreachable"}, {"papers", engine->papers().size()}});
+            return;
+        }
+        sendJson(res, 200, {{"status", "ok"}, {"database", "ok"}, {"papers", engine->papers().size()}});
     });
 
     server_.Get("/api/stats", [this](const httplib::Request&, httplib::Response& res) {
