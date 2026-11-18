@@ -3,6 +3,7 @@
 
 #include <libpq-fe.h>
 #include <condition_variable>
+#include <functional>
 #include <memory>
 #include <mutex>
 #include <optional>
@@ -38,6 +39,17 @@ private:
     std::shared_ptr<PGresult> result_;
 };
 
+class Transaction
+{
+public:
+    Result query(const std::string& sql, const Params& params = {});
+
+private:
+    friend class Database;
+    explicit Transaction(PGconn* conn) : conn_(conn) {}
+    PGconn* conn_;
+};
+
 class Database
 {
 public:
@@ -47,6 +59,7 @@ public:
     Database& operator=(const Database&) = delete;
 
     Result query(const std::string& sql, const Params& params = {});
+    void transaction(const std::function<void(Transaction&)>& work);
 
 private:
     std::string connectionInfo_;

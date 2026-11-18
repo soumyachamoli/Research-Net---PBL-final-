@@ -106,7 +106,7 @@ void Database::release(PGconn* conn)
     available_.notify_one();
 }
 
-Result Database::query(const string& sql, const Params& params)
+static Result run(PGconn* conn, const string& sql, const Params& params, bool retryOnReset)
 {
     vector<const char*> values;
     for (const Param& p : params)
@@ -114,10 +114,9 @@ Result Database::query(const string& sql, const Params& params)
         values.push_back(p ? p->c_str() : nullptr);
     }
 
-    PGconn* conn = acquire();
     PGresult* raw = PQexecParams(conn, sql.c_str(), (int)values.size(), nullptr,
                                  values.empty() ? nullptr : values.data(), nullptr, nullptr, 0);
-    if (PQstatus(conn) != CONNECTION_OK)
+    if (retryOnReset && PQstatus(conn) != CONNECTION_OK)
     {
         PQclear(raw);
         PQreset(conn);
@@ -134,11 +133,49 @@ Result Database::query(const string& sql, const Params& params)
         {
             message = PQerrorMessage(conn);
         }
-        release(conn);
         throw DatabaseError(message, state ? state : "");
     }
-    release(conn);
     return result;
+}
+
+Result Database::query(const string& sql, const Params& params)
+{
+    PGconn* conn = acquire();
+    try
+    {
+        Result result = run(conn, sql, params, true);
+        release(conn);
+        return result;
+    }
+    catch (...)
+    {
+        release(conn);
+        throw;
+    }
+}
+
+Result Transaction::query(const string& sql, const Params& params)
+{
+    return run(conn_, sql, params, false);
+}
+
+void Database::transaction(const function<void(Transaction&)>& work)
+{
+    PGconn* conn = acquire();
+    try
+    {
+        run(conn, "BEGIN", {}, true);
+        Transaction tx(conn);
+        work(tx);
+        run(conn, "COMMIT", {}, false);
+    }
+    catch (...)
+    {
+        PQclear(PQexec(conn, "ROLLBACK"));
+        release(conn);
+        throw;
+    }
+    release(conn);
 }
 
 

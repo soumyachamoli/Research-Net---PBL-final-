@@ -94,15 +94,18 @@ void UserRepository::updateName(int userId, const string& name)
 
 bool UserRepository::changePassword(int userId, const string& currentPassword, const string& newPassword)
 {
-    Result r = db_.query(R"(
-        UPDATE users SET password_hash = crypt($3, gen_salt('bf', $4::int)), updated_at = now()
-         WHERE id = $1 AND password_hash = crypt($2, password_hash)
-        RETURNING id)",
-        {toParam(userId), currentPassword, newPassword, string(BCRYPT_COST)});
-    if (r.rows() == 0)
-    {
-        return false;
-    }
-    db_.query("DELETE FROM sessions WHERE user_id = $1", {toParam(userId)});
-    return true;
+    bool changed = false;
+    db_.transaction([&](Transaction& tx) {
+        Result r = tx.query(R"(
+            UPDATE users SET password_hash = crypt($3, gen_salt('bf', $4::int)), updated_at = now()
+             WHERE id = $1 AND password_hash = crypt($2, password_hash)
+            RETURNING id)",
+            {toParam(userId), currentPassword, newPassword, string(BCRYPT_COST)});
+        changed = r.rows() > 0;
+        if (changed)
+        {
+            tx.query("DELETE FROM sessions WHERE user_id = $1", {toParam(userId)});
+        }
+    });
+    return changed;
 }

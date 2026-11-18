@@ -123,8 +123,10 @@ bool ActivityRepository::deleteView(int userId, int paperId)
 
 void ActivityRepository::clearHistory(int userId)
 {
-    db_.query("DELETE FROM search_history WHERE user_id = $1", {toParam(userId)});
-    db_.query("DELETE FROM view_history WHERE user_id = $1", {toParam(userId)});
+    db_.transaction([&](Transaction& tx) {
+        tx.query("DELETE FROM search_history WHERE user_id = $1", {toParam(userId)});
+        tx.query("DELETE FROM view_history WHERE user_id = $1", {toParam(userId)});
+    });
 }
 
 vector<string> ActivityRepository::interests(int userId)
@@ -142,11 +144,13 @@ vector<string> ActivityRepository::interests(int userId)
 void ActivityRepository::setInterests(int userId, const vector<string>& interests)
 {
     json list = interests;
-    db_.query("DELETE FROM user_interests WHERE user_id = $1", {toParam(userId)});
-    db_.query("INSERT INTO user_interests (user_id, interest) "
-              "SELECT DISTINCT $1::int, value FROM json_array_elements_text($2::json) AS value "
-              "ON CONFLICT DO NOTHING",
-              {toParam(userId), list.dump()});
+    db_.transaction([&](Transaction& tx) {
+        tx.query("DELETE FROM user_interests WHERE user_id = $1", {toParam(userId)});
+        tx.query("INSERT INTO user_interests (user_id, interest) "
+                 "SELECT DISTINCT $1::int, value FROM json_array_elements_text($2::json) AS value "
+                 "ON CONFLICT DO NOTHING",
+                 {toParam(userId), list.dump()});
+    });
 }
 
 json ActivityRepository::counts(int userId)
