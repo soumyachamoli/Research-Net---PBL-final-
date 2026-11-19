@@ -85,6 +85,31 @@
     return date.toLocaleString('en-GB', { day: 'numeric', month: 'short', year: 'numeric', hour: '2-digit', minute: '2-digit' });
   }
 
+  async function copyText(text, done) {
+    try {
+      await navigator.clipboard.writeText(text);
+      toast(done);
+    } catch (err) {
+      toast('Could not copy. Select the text and copy it yourself.');
+    }
+  }
+
+  function apaAuthor(name) {
+    const parts = name.trim().split(/\s+/);
+    const last = parts.pop();
+    const initials = parts.map(w => w.split('-').map(x => x.charAt(0).toUpperCase() + '.').join('-')).join(' ');
+    return initials ? `${last}, ${initials}` : last;
+  }
+
+  function apaCitation(p) {
+    const names = p.authors.map(a => apaAuthor(a.name));
+    let authors = names.slice(0, 20).join(', ');
+    if (names.length > 1 && names.length <= 20) authors = names.slice(0, -1).join(', ') + ', & ' + names.at(-1);
+    const journal = p.journal ? ` ${p.journal.name}.` : '';
+    const doi = p.doi ? ` https://doi.org/${p.doi}` : '';
+    return `${authors} (${p.year || 'n.d.'}). ${p.title}.${journal}${doi}`;
+  }
+
   function toast(message) {
     const el = document.getElementById('toast');
     el.textContent = message;
@@ -732,7 +757,8 @@
         h('div', { class: 'action-row' },
           saveButton(p),
           doi && h('a', { class: 'btn btn-primary', href: doi, target: '_blank', rel: 'noopener' }, 'Open via DOI ', icon('external')),
-          url && url !== doi && h('a', { class: 'btn btn-secondary', href: url, target: '_blank', rel: 'noopener' }, 'Publisher page ', icon('external'))),
+          url && url !== doi && h('a', { class: 'btn btn-secondary', href: url, target: '_blank', rel: 'noopener' }, 'Publisher page ', icon('external')),
+          h('button', { class: 'btn btn-secondary', type: 'button', onclick: () => copyText(apaCitation(p), 'Citation copied (APA)') }, 'Copy citation')),
         h('h2', null, 'Abstract'),
         h('p', { class: 'abstract' }, p.abstract || 'No abstract available.'),
         p.keywords.length > 0 && [h('h2', null, 'Keywords'),
