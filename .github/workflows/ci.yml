@@ -33,7 +33,7 @@ jobs:
           python tools/load_papers.py
       - name: Start server
         run: |
-          PORT=8080 RELOAD_SECONDS=0 ./researchnet > server.log 2>&1 &
+          PORT=8080 RELOAD_SECONDS=0 SIGNUP_LIMIT_PER_HOUR=1000 ./researchnet > server.log 2>&1 &
           for i in $(seq 1 60); do curl -sf http://127.0.0.1:8080/api/health && exit 0; sleep 1; done
           cat server.log; exit 1
       - name: API end-to-end tests

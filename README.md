@@ -298,6 +298,7 @@ installs everything, imports the papers and builds. Then run `./researchnet`.
 | `COOKIE_SECURE` | off | `1` = session cookie only over HTTPS (production) |
 | `TRUST_PROXY` | off | `1` = client IP from `X-Forwarded-For` (behind a host's proxy) |
 | `RELOAD_SECONDS` | 60 | how often to check for changed papers (0 = never) |
+| `SIGNUP_LIMIT_PER_HOUR` | 20 | new accounts allowed per client address per hour |
 | `HISTORY_DAYS` | 180 | search and view history older than this is deleted hourly (0 = keep forever) |
 | `RN_WEIGHTS` | `0.5,0.2,0.15,0.1,0.05` | recommender weights |
 
@@ -344,6 +345,7 @@ failed logins.
 - Duplicate accounts are impossible (unique index on `lower(email)`).
 - Login: the same error for unknown email and wrong password, and 10 failures per client
   per 15 minutes -> 429.
+- Sign-ups: at most 20 new accounts per client address per hour (`SIGNUP_LIMIT_PER_HOUR`) -> 429.
 - Requests that change data are rejected if they come from another site (`Origin` check)
   or are not JSON (CSRF protection).
 - Every query is parameterized; every user-data query is scoped to the logged-in user.

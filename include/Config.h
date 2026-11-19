@@ -14,6 +14,7 @@ struct Config
     bool trustProxy = false;
     int reloadSeconds = 60;
     int historyDays = 180;
+    int signupsPerHour = 20;
     std::string webRoot = "web";
     RecommenderWeights weights;
 };

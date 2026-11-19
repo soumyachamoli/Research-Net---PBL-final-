@@ -59,6 +59,12 @@ static string checkName(const string& rawName)
 void WebServer::registerAuthRoutes()
 {
     post("/api/register", [this](const httplib::Request& req, httplib::Response& res) {
+        string client = clientAddress(req);
+        if (signupLimiter_.blocked(client))
+        {
+            sendError(res, 429, "Too many accounts were created from this network. Please try again in an hour.");
+            return;
+        }
         json body = jsonBody(req);
         string name = checkName(jsonText(body, "name", 200));
         string email = normalizeEmail(jsonText(body, "email", 300));
@@ -79,6 +85,7 @@ void WebServer::registerAuthRoutes()
             sendError(res, 409, "An account with this email already exists");
             return;
         }
+        signupLimiter_.record(client);
         setSessionCookie(res, users_.createSession(user->id, SESSION_DAYS), SESSION_DAYS * 86400);
         sendJson(res, 201, {{"user", userJson(*user)}});
     });
@@ -101,7 +108,7 @@ void WebServer::registerAuthRoutes()
         optional<User> user = users_.verifyPassword(email, password);
         if (!user)
         {
-            loginLimiter_.recordFailure(client);
+            loginLimiter_.record(client);
             sendError(res, 401, "Wrong email or password");
             return;
         }

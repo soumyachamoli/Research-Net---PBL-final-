@@ -15,14 +15,17 @@
 #include <string>
 #include <unordered_map>
 
-class LoginLimiter
+class RateLimiter
 {
 public:
+    RateLimiter(size_t maxEvents, std::chrono::minutes window) : maxEvents_(maxEvents), window_(window) {}
     bool blocked(const std::string& client);
-    void recordFailure(const std::string& client);
+    void record(const std::string& client);
     void reset(const std::string& client);
 
 private:
+    size_t maxEvents_;
+    std::chrono::minutes window_;
     std::mutex mutex_;
     std::unordered_map<std::string, std::deque<std::chrono::steady_clock::time_point>> failures_;
     void forgetOld(std::deque<std::chrono::steady_clock::time_point>& times);
@@ -41,7 +44,8 @@ private:
     PaperRepository papers_;
     UserRepository users_;
     ActivityRepository activity_;
-    LoginLimiter loginLimiter_;
+    RateLimiter loginLimiter_;
+    RateLimiter signupLimiter_;
     httplib::Server server_;
 
     void registerPaperRoutes();

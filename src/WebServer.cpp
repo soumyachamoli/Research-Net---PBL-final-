@@ -5,7 +5,8 @@ using namespace std;
 using json = nlohmann::json;
 
 WebServer::WebServer(const Config& config, Database& db, EngineHolder& engines)
-    : config_(config), db_(db), engines_(engines), papers_(db), users_(db), activity_(db)
+    : config_(config), db_(db), engines_(engines), papers_(db), users_(db), activity_(db),
+      loginLimiter_(10, chrono::minutes(15)), signupLimiter_(config.signupsPerHour, chrono::minutes(60))
 {
     if (!server_.set_mount_point("/", config_.webRoot))
     {
@@ -184,27 +185,24 @@ void WebServer::setSessionCookie(httplib::Response& res, const string& token, in
 }
 
 
-static const size_t MAX_FAILED_LOGINS = 10;
-static const auto LOGIN_WINDOW = chrono::minutes(15);
-
-void LoginLimiter::forgetOld(deque<chrono::steady_clock::time_point>& times)
+void RateLimiter::forgetOld(deque<chrono::steady_clock::time_point>& times)
 {
     auto now = chrono::steady_clock::now();
-    while (!times.empty() && now - times.front() > LOGIN_WINDOW)
+    while (!times.empty() && now - times.front() > window_)
     {
         times.pop_front();
     }
 }
 
-bool LoginLimiter::blocked(const string& client)
+bool RateLimiter::blocked(const string& client)
 {
     lock_guard<mutex> lock(mutex_);
     auto& times = failures_[client];
     forgetOld(times);
-    return times.size() >= MAX_FAILED_LOGINS;
+    return times.size() >= maxEvents_;
 }
 
-void LoginLimiter::recordFailure(const string& client)
+void RateLimiter::record(const string& client)
 {
     lock_guard<mutex> lock(mutex_);
     auto& times = failures_[client];
@@ -212,7 +210,7 @@ void LoginLimiter::recordFailure(const string& client)
     times.push_back(chrono::steady_clock::now());
 }
 
-void LoginLimiter::reset(const string& client)
+void RateLimiter::reset(const string& client)
 {
     lock_guard<mutex> lock(mutex_);
     failures_.erase(client);
