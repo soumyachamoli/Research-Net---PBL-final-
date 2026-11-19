@@ -51,6 +51,19 @@ If port 8080 is already used on your computer, change `"8080:8080"` in
 
 See [Run it locally](#run-it-locally) below.
 
+### If something goes wrong
+
+| Problem | Fix |
+|---|---|
+| `Cannot connect to the Docker daemon` / `docker: command not found` | Open Docker Desktop and wait until it says it is running, then try again. |
+| `port is already allocated` or `Could not listen on ... 8080` | Something else uses port 8080. Change `"8080:8080"` to `"8081:8080"` in `docker-compose.yml` (Docker) or run `PORT=8081 ./researchnet`, then open port 8081. |
+| The page loads slowly or not at all on `localhost` (Windows) | Use `http://127.0.0.1:8080` instead of `localhost`. |
+| `Permission denied` when running `./build.sh` | Run `chmod +x build.sh` once, or start it with `bash build.sh`. |
+| The compiler runs out of memory | Build one file at a time: `JOBS=1 ./build.sh`. In Docker Desktop, give Docker more memory under Settings, Resources. |
+| `libpq.dll was not found` (Windows) | Add PostgreSQL's `bin` folder to `PATH`, e.g. `export PATH="/c/Program Files/PostgreSQL/18/bin:$PATH"`. |
+| `password authentication failed` | The password in `config.txt` or `DATABASE_URL` does not match your PostgreSQL password. |
+| `The papers table is empty` | Import the data: `python tools/load_papers.py "<connection string>"`. |
+
 ## Use of AI tools
 
 This project was built with substantial help from **Claude**, an AI assistant made by
