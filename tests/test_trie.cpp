@@ -24,6 +24,22 @@ static void testTextUtils()
     CHECK(containsIgnoreCase("Ashish Vaswani", "VASWANI"));
 }
 
+static void testTextEdgeCases()
+{
+    cout << "TextUtils edge cases" << endl;
+    CHECK(tokenize("").empty());
+    CHECK(tokenize("!!! --- ...").empty());
+    CHECK(analyze("the of and a").empty());
+    CHECK(tokenize("MÃ¼ller lab").at(0) == "mÃ¼ller");
+    CHECK(stem("string") == "string");
+    CHECK(stem("bus") == "bus");
+    CHECK(stem("is") == "is");
+    CHECK(normalizeKey("   ").empty());
+    CHECK(normalizeKey("A  --  B") == "a b");
+    CHECK(containsIgnoreCase("anything", ""));
+    CHECK(!containsIgnoreCase("graph", "graphs"));
+}
+
 static void testTrie()
 {
     cout << "Trie" << endl;
@@ -57,6 +73,7 @@ static void testTrie()
 int main()
 {
     testTextUtils();
+    testTextEdgeCases();
     testTrie();
     return finish();
 }
