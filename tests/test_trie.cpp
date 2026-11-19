@@ -70,10 +70,35 @@ static void testTrie()
     CHECK(paper.size() == 1 && paper[0].kind == "paper" && paper[0].paperId == 42);
 }
 
+static void testTrieTopSuggestions()
+{
+    cout << "Trie top suggestions" << endl;
+    Trie trie;
+    for (int i = 1; i <= 15; i++)
+    {
+        trie.insert("network " + to_string(i), "keyword", i);
+    }
+    string longTitle = "A very long paper title that keeps going well past eighty characters so it gets cut";
+    trie.insert(longTitle, "paper", 1, 7);
+    trie.finalize();
+
+    vector<Suggestion> s = trie.autocomplete("netw", 20);
+    CHECK(s.size() == Trie::TOP_K);
+    CHECK(s.front().text == "network 15");
+    CHECK(s.back().text == "network 6");
+    for (size_t i = 1; i < s.size(); i++)
+    {
+        CHECK(s[i - 1].weight >= s[i].weight);
+    }
+    vector<Suggestion> paper = trie.autocomplete("a very long paper", 5);
+    CHECK(paper.size() == 1 && paper[0].text == longTitle && paper[0].paperId == 7);
+}
+
 int main()
 {
     testTextUtils();
     testTextEdgeCases();
     testTrie();
+    testTrieTopSuggestions();
     return finish();
 }
