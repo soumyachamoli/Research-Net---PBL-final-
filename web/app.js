@@ -166,21 +166,23 @@
 
   const routes = [
     { pattern: /^\/$/, page: landingPage },
-    { pattern: /^\/login$/, page: (m, q) => authPage('login', q) },
-    { pattern: /^\/register$/, page: (m, q) => authPage('register', q) },
-    { pattern: /^\/dashboard$/, page: dashboardPage, auth: true },
-    { pattern: /^\/search$/, page: searchPage },
-    { pattern: /^\/paper\/(\d+)$/, page: paperPage },
-    { pattern: /^\/recommendations$/, page: recommendationsPage, auth: true },
-    { pattern: /^\/saved$/, page: savedPage, auth: true },
-    { pattern: /^\/history$/, page: historyPage, auth: true },
-    { pattern: /^\/profile$/, page: profilePage, auth: true },
+    { pattern: /^\/login$/, title: 'Log in', page: (m, q) => authPage('login', q) },
+    { pattern: /^\/register$/, title: 'Sign up', page: (m, q) => authPage('register', q) },
+    { pattern: /^\/dashboard$/, title: 'Dashboard', page: dashboardPage, auth: true },
+    { pattern: /^\/search$/, title: q => q.get('q') ? `Search: ${q.get('q')}` : 'Search', page: searchPage },
+    { pattern: /^\/paper\/(\d+)$/, title: 'Paper', page: paperPage },
+    { pattern: /^\/recommendations$/, title: 'For you', page: recommendationsPage, auth: true },
+    { pattern: /^\/saved$/, title: 'Saved papers', page: savedPage, auth: true },
+    { pattern: /^\/history$/, title: 'History', page: historyPage, auth: true },
+    { pattern: /^\/profile$/, title: 'Profile', page: profilePage, auth: true },
   ];
 
   function render() {
     const { path, query } = parseHash();
     const token = ++renderToken;
     const route = routes.find(r => r.pattern.test(path));
+    const title = route && (typeof route.title === 'function' ? route.title(query) : route.title);
+    document.title = title ? `${title} · ResearchNet` : 'ResearchNet';
     nav.classList.remove('open');
     document.getElementById('menu-button').setAttribute('aria-expanded', 'false');
     renderNav(path);
@@ -1011,7 +1013,7 @@
   async function start() {
     const me = await api('/api/me');
     state.user = me.ok ? me.data.user : null;
-    window.addEventListener('hashchange', () => { document.title = 'ResearchNet'; render(); });
+    window.addEventListener('hashchange', render);
     document.addEventListener('keydown', e => {
       const typing = e.target.closest('input, textarea, select, [contenteditable]');
       if (e.key !== '/' || typing || e.ctrlKey || e.metaKey || e.altKey) return;
