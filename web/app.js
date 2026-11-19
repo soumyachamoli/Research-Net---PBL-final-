@@ -1012,6 +1012,12 @@
     const me = await api('/api/me');
     state.user = me.ok ? me.data.user : null;
     window.addEventListener('hashchange', () => { document.title = 'ResearchNet'; render(); });
+    document.addEventListener('keydown', e => {
+      const typing = e.target.closest('input, textarea, select, [contenteditable]');
+      if (e.key !== '/' || typing || e.ctrlKey || e.metaKey || e.altKey) return;
+      const box = main.querySelector('.searchbox input') || topSearch.querySelector('input');
+      if (box) { e.preventDefault(); box.focus(); box.select(); }
+    });
     render();
   }
 
