@@ -769,7 +769,7 @@
           fact('Journal', j && j.name), fact('Publisher', j && j.publisher), fact('ISSN', j && j.issn),
           fact('Published', p.publicationDate || p.year), fact('Type', p.type), fact('Category', p.category),
           fact('Topic', p.topic), fact('Cited by', fmtNumber(p.citedBy)), fact('Journal impact', impact),
-          fact('DOI', p.doi), fact('Source', `${p.dataSource}${p.retrievedAt ? ', retrieved ' + p.retrievedAt : ''}`)))));
+          fact('DOI', p.doi && [p.doi, ' ', h('button', { class: 'btn btn-ghost btn-sm', type: 'button', 'aria-label': 'Copy DOI', onclick: () => copyText(p.doi, 'DOI copied') }, 'Copy')]), fact('Source', `${p.dataSource}${p.retrievedAt ? ', retrieved ' + p.retrievedAt : ''}`)))));
 
     const similarSection = h('section', { class: 'section' },
       h('div', { class: 'section-title' }, h('h2', null, 'Similar papers'), h('span', { class: 'muted' }, 'TF-IDF cosine similarity, keywords, authors, recency and impact')));
