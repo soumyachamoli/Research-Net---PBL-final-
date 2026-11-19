@@ -341,19 +341,36 @@
     return button;
   }
 
-  function paperCard(paper, { extra = null, actions = null } = {}) {
+  function queryWords(q) {
+    return (q || '').toLowerCase().split(/[^a-z0-9]+/).filter(w => w.length >= 3 && w !== 'and');
+  }
+
+  function highlight(text, words) {
+    if (!words || !words.length) return text;
+    const pattern = new RegExp('\\b(' + words.join('|') + ')', 'gi');
+    const parts = [];
+    let last = 0;
+    for (const m of text.matchAll(pattern)) {
+      parts.push(text.slice(last, m.index), h('mark', null, m[0]));
+      last = m.index + m[0].length;
+    }
+    parts.push(text.slice(last));
+    return parts;
+  }
+
+  function paperCard(paper, { extra = null, actions = null, words = null } = {}) {
     const doi = paper.doi ? safeUrl('https://doi.org/' + paper.doi) : null;
     const abstract = paper.abstractPreview || '';
     return h('article', { class: 'paper-card' },
       h('div', { class: 'paper-main' },
-        h('h3', { class: 'paper-title' }, h('a', { href: '#/paper/' + paper.id }, paper.title)),
+        h('h3', { class: 'paper-title' }, h('a', { href: '#/paper/' + paper.id }, highlight(paper.title, words))),
         authorLine(paper) && h('div', { class: 'paper-authors' }, authorLine(paper)),
         h('div', { class: 'paper-meta' },
           paper.journal && h('span', { class: 'journal' }, paper.journal),
           paper.year && h('span', null, paper.year),
           paper.type && h('span', null, paper.type),
           h('span', null, 'Cited by ' + fmtNumber(paper.citedBy || 0))),
-        abstract && h('p', { class: 'paper-abstract' }, abstract + (abstract.length >= 320 ? '…' : '')),
+        abstract && h('p', { class: 'paper-abstract' }, highlight(abstract + (abstract.length >= 320 ? '…' : ''), words)),
         h('div', { class: 'paper-footer' },
           paper.relevance != null && h('span', { class: 'badge rel', title: 'TF-IDF cosine similarity to your query' },
             'Relevance ' + Math.round(paper.relevance * 100) + '%'),
@@ -667,7 +684,8 @@
         active.length > 0 && h('button', { class: 'btn btn-secondary', onclick: () => go('/search', { q: params.q }) }, 'Clear filters')));
       return;
     }
-    data.results.forEach(p => results.append(paperCard(p)));
+    const words = queryWords(params.q);
+    data.results.forEach(p => results.append(paperCard(p, { words })));
     if (pages > 1) {
       const page = data.page;
       const to = n => link('/search', Object.assign({}, params, { page: n }));

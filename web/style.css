@@ -152,6 +152,7 @@ button, input, select { font: inherit; color: inherit; }
 .paper-authors { color: var(--text-2); font-size: .9rem; margin-bottom: 4px; }
 .paper-meta { display: flex; flex-wrap: wrap; align-items: center; gap: 4px 12px; color: var(--text-3); font-size: .85rem; margin-bottom: 8px; }
 .paper-meta .journal { color: var(--accent); font-style: italic; }
+.paper-main mark { background: #fff1a8; color: inherit; padding: 0 1px; border-radius: 2px; }
 .paper-abstract { color: var(--text-2); font-size: .92rem; margin: 0 0 10px; }
 .paper-footer { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; }
 .badge { display: inline-flex; align-items: center; gap: 4px; font-size: .78rem; font-weight: 600; padding: 3px 8px; border-radius: 6px; background: var(--surface-2); color: var(--text-2); }
