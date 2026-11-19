@@ -64,17 +64,6 @@ See [Run it locally](#run-it-locally) below.
 | `password authentication failed` | The password in `config.txt` or `DATABASE_URL` does not match your PostgreSQL password. |
 | `The papers table is empty` | Import the data: `python tools/load_papers.py "<connection string>"`. |
 
-## Use of AI tools
-
-This project was built with substantial help from **Claude**, an AI assistant made by
-Anthropic. I wrote the first version (v4: a C++ Trie, linked lists and a hash-table
-inverted index over papers stored in PostgreSQL, with a console menu and a simple
-website) and set the requirements for this version. Claude reviewed v4 and then wrote
-most of the current code to those requirements: the STL rewrite of the data structures,
-the TF-IDF search and recommender, the REST API, accounts, the website, the OpenAlex
-import scripts, the tests and the deployment setup. I ran, tested and reviewed the
-result.
-
 ## Features
 
 | Area | What it does |
@@ -388,6 +377,12 @@ Secrets go only into the hosting dashboard, never into the repository.
 - Login rate limiting is kept in memory, so it is per server instance.
 - On free hosting tiers the server sleeps when idle; the first request then takes longer
   while the index is rebuilt.
+
+## Use of AI tools
+
+I wrote the first version (v4) and set the requirements for this one. Most of the
+current code was written with Claude, an AI assistant by Anthropic, and then run,
+tested and reviewed by me.
 
 ## Credits
 
