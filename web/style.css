@@ -47,6 +47,7 @@ button, input, select { font: inherit; color: inherit; }
 :focus-visible { outline: 2px solid var(--brand); outline-offset: 2px; }
 [hidden] { display: none !important; }
 
+.noscript { max-width: 640px; margin: 48px auto 0; padding: 16px 20px; background: var(--warn-soft); color: var(--warn); border-radius: var(--radius); text-align: center; }
 .skip-link { position: absolute; left: -999px; top: 8px; background: var(--surface); padding: 8px 12px; z-index: 100; border-radius: 6px; }
 .skip-link:focus { left: 8px; }
 
